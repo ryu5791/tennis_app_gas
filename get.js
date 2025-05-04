@@ -1,6 +1,6 @@
 /**
- * ゲームデータの収集と検証を管理するクラス
- */
+* ゲームデータの収集と検証を管理するクラス
+*/
 class GameCollector {
   /**
    * コンストラクタ
@@ -244,8 +244,8 @@ class GameCollector {
     const startRow = cell.getRow();
     const startCol = cell.getColumn();
     
-    // バッファをクリア
-    this.buffer = [];
+    // バッファをクリアしない（すでに親関数でクリアされているため）
+    // this.buffer = [];
     
     // 処理結果を格納するオブジェクト
     const result = {
@@ -254,7 +254,8 @@ class GameCollector {
       failedCount: 0,
       failedGames: [],
       successGames: [],  
-      gameDetails: []  // ゲームの詳細情報を格納
+      gameDetails: [],  // ゲームの詳細情報を格納
+      message: ""       // メッセージを追加
     };
     
     // 会員マスターからIDと表示名のマッピングを作成
@@ -269,11 +270,18 @@ class GameCollector {
     // SheetInfoクラスから試合位置テーブルを取得
     const gamePositions = SheetInfo.positions;
     
+    // 現在のページ情報を取得
+    const currentPageInfo = SheetInfo.pageInfo.find(page => page.position === topLeftCell);
+    const startGameNumber = currentPageInfo ? currentPageInfo.startGameNo : 1;
+    
     // 日付の初期化
     let currentDate = null;
     
     // シート内の全ゲームを処理
     for (let i = 0; i < gamePositions.length; i++) {
+      // 実際のゲーム番号を計算
+      const actualGameNumber = startGameNumber + i;
+      
       // 相対位置を取得
       const rowOffset = gamePositions[i][0];
       const colOffset = gamePositions[i][1];
@@ -315,7 +323,7 @@ class GameCollector {
       // 結果を記録
       if (success) {
         result.successCount++;
-        result.successGames.push(i + 1);
+        result.successGames.push(actualGameNumber);
         
         // バッファから追加されたデータを取得
         const addedData = this.buffer.slice(bufferSizeBefore);
@@ -349,7 +357,7 @@ class GameCollector {
           const gamePtB = teamB[0].gamePt;
           
           result.gameDetails.push({
-            gameNumber: i + 1,
+            gameNumber: actualGameNumber,
             dateStr: dateStr,
             gameNoStr: gameNoStr,
             teamAInfo: teamAInfo,
@@ -362,7 +370,7 @@ class GameCollector {
       } else {
         result.failedCount++;
         result.failedGames.push({
-          gameNumber: i + 1,
+          gameNumber: actualGameNumber,
           cellReference: gameTopLeftCell
         });
         
@@ -376,17 +384,17 @@ class GameCollector {
         } else {
           // その他のエラーの場合、ID重複やスコア不正などをチェック
           // ここでは簡略化して、主なエラーメッセージを設定
-          if (this.lastError && this.lastError.includes("ID")) {
+          if (Logger.getLog().includes("IDが重複しています")) {
             errorReason = "IDが重複しています";
-          } else if (this.lastError && this.lastError.includes("スコア")) {
+          } else if (Logger.getLog().includes("スコアが正しくありません")) {
             errorReason = "スコアが不正です";
-          } else if (this.lastError && this.lastError.includes("選手")) {
+          } else if (Logger.getLog().includes("各チームに2人の選手が必要です")) {
             errorReason = "各チームに2人の選手が必要です";
           }
         }
         
         result.gameDetails.push({
-          gameNumber: i + 1,
+          gameNumber: actualGameNumber,
           success: false,
           errorReason: errorReason
         });
@@ -403,20 +411,21 @@ class GameCollector {
       result.gameDetails.forEach(game => {
         if (game.success) {
           message += `第${game.gameNumber}ゲーム：${game.dateStr} - No.${game.gameNoStr}\n`;
-          message += `  ${game.teamAPoints}pt：${game.teamAInfo}\n`;
-          message += `  ${game.teamBPoints}pt：${game.teamBInfo}\n`;
+          message += `　${game.teamAPoints}pt：${game.teamAInfo}\n`;
+          message += `　${game.teamBPoints}pt：${game.teamBInfo}\n`;
         } else {
           message += `第${game.gameNumber}ゲーム：NG（${game.errorReason}）\n`;
         }
       });
       
-      UIHelper.showAlert(message);
+      result.message = message;
     } else {
-      UIHelper.showAlert("処理対象のゲームがありませんでした。");
+      result.message = "処理対象のゲームがありませんでした。";
     }
     
     return result;
   }
+  
   /**
    * バッファをクリアする
    */
@@ -432,20 +441,87 @@ class GameCollector {
   getBuffer() {
     return this.buffer;
   }
-}
-
-function getAllGame()
-{
-  gameCollectorInstance.getOneSheet("B2");
-}
-
-
-/**
+ }
+ 
+ function getAllGame()
+ {
+  try {
+    // GameCollectorインスタンスが存在しない場合は作成
+    if (!gameCollectorInstance) {
+      gameCollectorInstance = new GameCollector();
+    }
+    
+    // インスタンスをクリアする代わりに、バッファのみクリア
+    gameCollectorInstance.clearBuffer();
+    
+    let fullMessage = "";
+    let hasData = false;
+    let totalSuccessCount = 0;
+    let totalFailedCount = 0;
+    
+    // 各ページを処理
+    SheetInfo.pageInfo.forEach(pageInfo => {
+      const result = gameCollectorInstance.getOneSheet(pageInfo.position);
+      
+      if (result.message && result.message !== "処理対象のゲームがありませんでした。") {
+        fullMessage += `=== ${pageInfo.pageName} ===\n`;
+        fullMessage += result.message;
+        fullMessage += "\n";
+        hasData = true;
+        totalSuccessCount += result.successCount;
+        totalFailedCount += result.failedCount;
+      }
+    });
+    
+    // メッセージがない場合
+    if (!fullMessage) {
+      fullMessage = "処理対象のゲームがありませんでした。";
+      UIHelper.showAlert(fullMessage);
+      return;
+    }
+    
+    // データがある場合、保存するか確認
+    if (hasData) {
+      // サマリーを追加
+      fullMessage += `\n=== サマリー ===\n`;
+      fullMessage += `成功: ${totalSuccessCount}件\n`;
+      fullMessage += `失敗: ${totalFailedCount}件\n`;
+      fullMessage += `\n保存しますか？`;
+      
+      // UIを使用してYES/NOダイアログを表示
+      const ui = SpreadsheetApp.getUi();
+      const response = ui.alert(
+        'データ保存の確認',
+        fullMessage,
+        ui.ButtonSet.YES_NO
+      );
+      
+      // YESが選択された場合、データを保存
+      if (response === ui.Button.YES) {
+        const saveResult = saveBufferData();
+        if (saveResult.success) {
+          UIHelper.showAlert(`データを保存しました。\n保存件数: ${saveResult.savedCount}件`);
+        } else {
+          UIHelper.showAlert(`保存中にエラーが発生しました: ${saveResult.error}`);
+        }
+      } else {
+        UIHelper.showAlert("保存をキャンセルしました。");
+      }
+    }
+  } catch (error) {
+    UIHelper.showAlert(`エラーが発生しました: ${error.message}`);
+    Logger.log(`Error in getAllGame: ${error.message}`);
+    Logger.log(`Stack trace: ${error.stack}`);
+  }
+ }
+ 
+ 
+ /**
  * DBから指定した日付の最大ゲーム番号を取得する関数
  * @param {Date|string} gameDate - 検索する日付
  * @return {number} - 指定日付の最大ゲーム番号（該当ゲームがない場合は0）
  */
-function getDBMaxGameNumber(gameDate) {
+ function getDBMaxGameNumber(gameDate) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var outputSheet = ss.getSheetByName('スコア出力');
   var lastRow = outputSheet.getLastRow();
@@ -478,15 +554,15 @@ function getDBMaxGameNumber(gameDate) {
   }
   
   return maxGameNo;
-}
-
-/**
+ }
+ 
+ /**
  * 指定した日付の最大ゲーム番号を取得する関数
  * まずバッファ内を検索し、なければDBを検索する
  * @param {Date|string} gameDate - 検索する日付
  * @return {number} - 指定日付の最大ゲーム番号（該当ゲームがない場合は0）
  */
-function getMaxGameNumber(gameDate) {
+ function getMaxGameNumber(gameDate) {
   // GameCollectorのインスタンスが存在するかチェック
   if (typeof gameCollectorInstance === 'undefined' || gameCollectorInstance === null) {
     // インスタンスがなければDBから直接取得
@@ -501,7 +577,9 @@ function getMaxGameNumber(gameDate) {
   
   // バッファとDBの最大値を比較して大きい方を返す
   return Math.max(bufferMaxNo, dbMaxNo);
-}
-
-// グローバルなGameCollectorインスタンス
-let gameCollectorInstance = new GameCollector();
+ }
+ 
+ // グローバルなGameCollectorインスタンス
+ if (typeof gameCollectorInstance === 'undefined' || gameCollectorInstance === null) {
+  gameCollectorInstance = new GameCollector();
+ }

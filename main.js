@@ -3,6 +3,7 @@ function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('テニススコア')
     .addItem('クリア', 'clearData')
+    .addItem('全ページクリア', 'clearAllPage')  // 新しく追加
     .addItem('登録', 'registerData')
     .addItem('取得', 'getAllGame')
     .addToUi();
@@ -164,6 +165,9 @@ function registerOneGame(topLeftCell) {
   // 日付をYYYY-MM-DD形式に変換
   var formattedDate = Utilities.formatDate(new Date(gameDate), Session.getScriptTimeZone(), "yyyy-MM-dd");
   
+  // 現在時刻を取得
+  var currentTimestamp = new Date();
+  
   // 左上セルの列に応じて、名前列とID列、スコア列を設定
   var nameCol = col + SheetInfo.OFFSET_COL_NAME; // 左上セルから1つ右の列が名前列
   var idCol = col + SheetInfo.OFFSET_COL_ID;     // 左上セルから2つ右の列がID列
@@ -196,7 +200,7 @@ function registerOneGame(topLeftCell) {
   
   // ヘッダー行がない場合は追加
   if (outputSheet.getLastRow() == 0) {
-    outputSheet.appendRow(['date', 'gameNo', 'ID', 'pairID', 'serve1st', 'serve2nd', 'gamePt', 'serveTurn', 'row']);
+    outputSheet.appendRow(['date', 'gameNo', 'ID', 'pairID', 'serve1st', 'serve2nd', 'gamePt', 'serveTurn', 'row', 'createDate']);
   }
   
   // データを出力シートに追加
@@ -211,7 +215,8 @@ function registerOneGame(topLeftCell) {
       '', // serve2nd
       scoreA,
       '', // serveTurn
-      1 // row
+      1, // row
+      currentTimestamp // createDate
     ]);
   }
   
@@ -225,7 +230,8 @@ function registerOneGame(topLeftCell) {
       '', // serve2nd
       scoreA,
       '', // serveTurn
-      2 // row
+      2, // row
+      currentTimestamp // createDate
     ]);
   }
   
@@ -240,7 +246,8 @@ function registerOneGame(topLeftCell) {
       '', // serve2nd
       scoreB,
       '', // serveTurn
-      3 // row
+      3, // row
+      currentTimestamp // createDate
     ]);
   }
   
@@ -254,9 +261,67 @@ function registerOneGame(topLeftCell) {
       '', // serve2nd
       scoreB,
       '', // serveTurn
-      4 // row
+      4, // row
+      currentTimestamp // createDate
     ]);
   }
   
   return true;
+}
+/**
+ * バッファのデータをスコア出力シートに保存する関数
+ * @return {Object} - 保存結果 {success: boolean, savedCount: number, error: string}
+ */
+function saveBufferData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const outputSheet = ss.getSheetByName('スコア出力');
+    
+    // インスタンスが存在するか確認
+    if (!gameCollectorInstance) {
+      return {success: false, savedCount: 0, error: "GameCollectorインスタンスが見つかりません"};
+    }
+    
+    // バッファからデータを取得
+    const buffer = gameCollectorInstance.getBuffer();
+    
+    // バッファのデバッグ情報を出力
+    Logger.log(`Buffer length: ${buffer ? buffer.length : 'buffer is null/undefined'}`);
+    if (buffer) {
+      Logger.log(`Buffer content: ${JSON.stringify(buffer)}`);
+    }
+    
+    if (!buffer || buffer.length === 0) {
+      return {success: false, savedCount: 0, error: "保存するデータがありません"};
+    }
+    
+    // 現在時刻を取得
+    const currentTimestamp = new Date();
+    
+    // ヘッダー行がない場合は追加
+    if (outputSheet.getLastRow() === 0) {
+      outputSheet.appendRow(['date', 'gameNo', 'ID', 'pairID', 'serve1st', 'serve2nd', 'gamePt', 'serveTurn', 'row', 'createDate']);
+    }
+    // データを出力シートに追加
+    buffer.forEach(record => {
+      outputSheet.appendRow([
+        record.date,
+        record.gameNo,
+        record.ID,
+        record.pairID,
+        "",
+        "",
+        record.gamePt,
+        "",
+        record.row,
+        currentTimestamp  // 現在時刻を追加
+      ]);
+    });
+    
+    return {success: true, savedCount: buffer.length, error: null};
+  } catch (error) {
+    Logger.log(`Error in saveBufferData: ${error.message}`);
+    Logger.log(`Stack trace: ${error.stack}`);
+    return {success: false, savedCount: 0, error: error.message};
+  }
 }
