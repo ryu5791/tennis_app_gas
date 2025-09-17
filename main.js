@@ -4,8 +4,8 @@ function onOpen() {
   ui.createMenu('テニススコア')
     .addItem('クリア', 'clearData')
     .addItem('全ページクリア', 'clearAllPage')  // 新しく追加
-    .addItem('登録', 'registerData')
-    .addItem('取得', 'getAllGame')
+    .addItem('登録(1ゲーム)', 'registerData')
+    .addItem('登録(全ゲーム)', 'getAllGame')
     .addToUi();
 }
 
