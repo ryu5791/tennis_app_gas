@@ -3,9 +3,11 @@ function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('テニススコア')
     .addItem('クリア', 'clearData')
-    .addItem('全ページクリア', 'clearAllPage')  // 新しく追加
+    .addItem('全ページクリア', 'clearAllPage')
     .addItem('登録(1ゲーム)', 'registerData')
     .addItem('登録(全ゲーム)', 'getAllGame')
+    .addSeparator()
+    .addItem('スコア集計', 'aggregateScores')  // 新規追加
     .addToUi();
 }
 
