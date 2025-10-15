@@ -6,8 +6,6 @@ function onOpen() {
     .addItem('全ページクリア', 'clearAllPage')
     .addItem('登録(1ゲーム)', 'registerData')
     .addItem('登録(全ゲーム)', 'getAllGame')
-    .addSeparator()
-    .addItem('スコア集計', 'aggregateScores')  // 新規追加
     .addToUi();
 }
 
@@ -53,13 +51,13 @@ function getDBMaxGameNumber(gameDate) {
 
 // データの入力チェックと登録
 function registerData() {
-  registerOneGame("B2")
+  registerOneGame("B3")
   SpreadsheetApp.getUi().alert("データが登録されました。");
 }
 
 /**
- * 1ページ分（12ゲーム）のデータを登録する関数
- * @param {string} topLeftCell - ページの左上セル（例: "B18"）
+ * 1ページ分（28ゲーム）のデータを登録する関数
+ * @param {string} topLeftCell - ページの左上セル（例: "B3"）
  * @return {Object} - 処理結果の情報（成功したゲーム数、失敗したゲーム数）
  */
 function registerOnePage(topLeftCell) {
@@ -74,7 +72,7 @@ function registerOnePage(topLeftCell) {
   
   // 処理結果を格納するオブジェクト
   const result = {
-    totalGames: 12,
+    totalGames: 28,
     successCount: 0,
     failedCount: 0,
     failedGames: []
@@ -83,7 +81,7 @@ function registerOnePage(topLeftCell) {
   // SheetInfoクラスから試合位置テーブルを取得
   const gamePositions = SheetInfo.positions;
   
-  // 12試合分処理
+  // 28試合分処理
   for (let i = 0; i < gamePositions.length; i++) {
     // 相対位置を取得
     const rowOffset = gamePositions[i][0];
@@ -129,7 +127,7 @@ function registerOnePage(topLeftCell) {
 
 /**
  * 1ゲームのデータを登録する関数
- * @param {string} topLeftCell - 登録するゲームの左上セル（例: "B2"、"H22"）
+ * @param {string} topLeftCell - 登録するゲームの左上セル（例: "B3"、"G8"）
  * @return {boolean} - 登録成功時はtrue、失敗時はfalse
  */
 function registerOneGame(topLeftCell) {
@@ -142,26 +140,14 @@ function registerOneGame(topLeftCell) {
   var row = cellRange.getRow();
   var col = cellRange.getColumn();
   
-  // 左上セルから日付を取得
-  var gameDate = cellRange.getValue();
+  // B1から日付を取得
+  var gameDateCell = scoreSheet.getRange(SheetInfo.DATE_CELL);
+  var gameDate = gameDateCell.getValue();
   
-  // B2の日付チェック（必須）
-  var mainDateCell = scoreSheet.getRange("B2");
-  if (!mainDateCell.getValue()) {
-    SpreadsheetApp.getUi().alert("B2セルに日付を入力してください。");
-    return false;
-  }
-  
-  // 日付が空の場合、前のゲームの日付を使用
+  // B1の日付チェック（必須）
   if (!gameDate) {
-    // 出力シートの最後の日付を取得
-    var lastRow = outputSheet.getLastRow();
-    if (lastRow > 1) {
-      gameDate = outputSheet.getRange(lastRow, 1).getValue();
-    } else {
-      // 出力シートにデータがない場合はB2の日付を使用
-      gameDate = mainDateCell.getValue();
-    }
+    SpreadsheetApp.getUi().alert("B1セルに日付を入力してください。");
+    return false;
   }
   
   // 日付をYYYY-MM-DD形式に変換
@@ -170,23 +156,23 @@ function registerOneGame(topLeftCell) {
   // 現在時刻を取得
   var currentTimestamp = new Date();
   
-  // 左上セルの列に応じて、名前列とID列、スコア列を設定
-  var nameCol = col + SheetInfo.OFFSET_COL_NAME; // 左上セルから1つ右の列が名前列
-  var idCol = col + SheetInfo.OFFSET_COL_ID;     // 左上セルから2つ右の列がID列
-  var scoreCol = col + SheetInfo.OFFSET_COL_POINT; // 左上セルから3つ右の列がスコア列
+  // 列オフセットを使用してセル位置を計算
+  var nameCol = col + SheetInfo.OFFSET_COL_NAME; // ID列の次が名前列
+  var idCol = col + SheetInfo.OFFSET_COL_ID;     // チーム表示の次がID列
+  var scoreCol = col + SheetInfo.OFFSET_COL_POINT; // 名前列の次がスコア列
   
   // チームAの選手データを取得
-  var memberA1Name = scoreSheet.getRange(row, nameCol).getValue();
   var memberA1Id = scoreSheet.getRange(row, idCol).getValue();
-  var memberA2Name = scoreSheet.getRange(row + 1, nameCol).getValue();
+  var memberA1Name = scoreSheet.getRange(row, nameCol).getValue();
   var memberA2Id = scoreSheet.getRange(row + 1, idCol).getValue();
+  var memberA2Name = scoreSheet.getRange(row + 1, nameCol).getValue();
   var scoreA = scoreSheet.getRange(row, scoreCol).getValue();
   
   // チームBの選手データを取得
-  var memberB1Name = scoreSheet.getRange(row + 2, nameCol).getValue();
   var memberB1Id = scoreSheet.getRange(row + 2, idCol).getValue();
-  var memberB2Name = scoreSheet.getRange(row + 3, nameCol).getValue();
+  var memberB1Name = scoreSheet.getRange(row + 2, nameCol).getValue();
   var memberB2Id = scoreSheet.getRange(row + 3, idCol).getValue();
+  var memberB2Name = scoreSheet.getRange(row + 3, nameCol).getValue();
   var scoreB = scoreSheet.getRange(row + 2, scoreCol).getValue();
   
   // データチェック - 最低限の必要データが揃っているか確認
@@ -270,6 +256,7 @@ function registerOneGame(topLeftCell) {
   
   return true;
 }
+
 /**
  * バッファのデータをスコア出力シートに保存する関数
  * @return {Object} - 保存結果 {success: boolean, savedCount: number, error: string}
@@ -304,6 +291,7 @@ function saveBufferData() {
     if (outputSheet.getLastRow() === 0) {
       outputSheet.appendRow(['date', 'gameNo', 'ID', 'pairID', 'serve1st', 'serve2nd', 'gamePt', 'serveTurn', 'row', 'createDate']);
     }
+    
     // データを出力シートに追加
     buffer.forEach(record => {
       outputSheet.appendRow([

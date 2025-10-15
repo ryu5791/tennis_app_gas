@@ -7,35 +7,32 @@ class SheetInfo {
   * @return {Array} 試合位置の配列 [行オフセット, 列オフセット]
   */
  static get positions() {
-   return [
-     [0, 0],   // 1試合目
-     [4, 0],   // 2試合目
-     [8, 0],   // 3試合目
-     [12, 0],  // 4試合目
-     [16, 0],  // 5試合目
-     [20, 0],  // 6試合目
-     [0, 6],   // 7試合目
-     [4, 6],   // 8試合目
-     [8, 6],   // 9試合目
-     [12, 6],  // 10試合目
-     [16, 6],  // 11試合目
-     [20, 6]   // 12試合目
-   ];
+   const positions = [];
+   const colOffsets = [0, 5, 10, 15]; // 列B,G,L,Qの相対オフセット（5列間隔）
+   const rowOffsets = [0, 5, 10, 15, 20, 25, 30]; // 7試合分の行（5行間隔）
+   
+   // 列優先で配置（列ごとに上から下へ）
+   for (let col of colOffsets) {
+     for (let row of rowOffsets) {
+       positions.push([row, col]);
+     }
+   }
+   return positions; // 28試合分
  }
 
  /**
   * 列オフセットを返すgetter
   */
- static get OFFSET_COL_DATE() {
-   return 0;  // 日付列のオフセット
- }
-
- static get OFFSET_COL_NAME() {
-   return 1;  // 会員名列のオフセット
+ static get OFFSET_COL_TEAM() {
+   return 0;  // チーム表示列（A/B固定表示）
  }
 
  static get OFFSET_COL_ID() {
-   return 2;  // ID列のオフセット
+   return 1;  // ID列のオフセット
+ }
+
+ static get OFFSET_COL_NAME() {
+   return 2;  // 会員名列のオフセット
  }
 
  static get OFFSET_COL_POINT() {
@@ -54,58 +51,37 @@ class SheetInfo {
  }
 
  /**
-  * 日付位置を返すgetter
+  * 日付セルの位置を返すgetter
   */
- static get OFFSET_DATE_POSITION() {
-   return [0, 0];  // 日付位置のオフセット
- }
-
-  /**
-   * 1ゲーム当たりの行数を返すgetter
-   * @return {number} - 1ゲーム当たりの行数
-   */
- static get ROWS_PER_GAME() {
-    return 4;  // 1ゲーム当たり4行（チームA: 2人、チームB: 2人）
+ static get DATE_CELL() {
+   return "B1";  // 日付は常にB1
  }
 
  /**
-  * シートの開始位置を返すgetter
-  * @param {number} page - ページ番号（0ベース）
-  * @return {string} - セル参照（例: "B2"）
+  * 1ゲーム当たりの行数を返すgetter
   */
- static get sheetPosition() {
-   const positions = {
-     0: "B2",    // 1ページ目の開始位置
-     1: "B28",   // 2ページ目の開始位置
-     2: "B54"    // 3ページ目の開始位置
-   };
-   
-   return positions;
+ static get ROWS_PER_GAME() {
+   return 4;  // チームA: 2人、チームB: 2人
+ }
+ 
+ /**
+  * ゲーム間の行間隔
+  */
+ static get ROWS_BETWEEN_GAMES() {
+   return 5;  // 各ゲーム4行 + 空白1行
  }
 
  /**
   * ページ情報を返すgetter
-  * @return {Array} ページ情報の配列
   */
  static get pageInfo() {
    return [
      {
        pageIndex: 0,
-       pageName: "1ページ目",
-       position: "B2",
-       startGameNo: 1
-     },
-     {
-       pageIndex: 1,
-       pageName: "2ページ目", 
-       position: "B28",
-       startGameNo: 13
-     },
-     {
-       pageIndex: 2,
-       pageName: "3ページ目",
-       position: "B54", 
-       startGameNo: 25
+       pageName: "スコア入力",
+       position: "B3",  // 最初のゲームデータ開始位置（行3）
+       startGameNo: 1,
+       totalGames: 28
      }
    ];
  }

@@ -26,11 +26,7 @@ function setBordersForGame(sheet, startRow, startCol) {
   const bottomRightCell = sheet.getRange(startRow + 3, startCol + 3);
   bottomRightCell.setBorder(true, true, true, true, null, null, "black", SpreadsheetApp.BorderStyle.SOLID_THICK);
 
-  // 日付セルの罫線をクリア
-  const dateCellRow = startRow + SheetInfo.OFFSET_DATE_POSITION[0];
-  const dateCellCol = startCol + SheetInfo.OFFSET_DATE_POSITION[1];
-  const dateCell = sheet.getRange(dateCellRow, dateCellCol, SheetInfo.ROWS_PER_GAME);
-  dateCell.setBorder(null, null, null, null, false, false);
+  // 日付セル関連の処理を削除（日付は各ゲームにない）
 
   // 全体の外枠を太線で設定
   fullRange.setBorder(true, true, true, true, null, null, "black", SpreadsheetApp.BorderStyle.SOLID_THICK);
@@ -38,7 +34,7 @@ function setBordersForGame(sheet, startRow, startCol) {
 
 /**
 * 指定したセルを起点に会員名とIDセルに数式を挿入する関数
-* @param {string} topLeftCell - 開始セルの位置 (例: "A1")
+* @param {string} topLeftCell - 開始セルの位置 (例: "B3")
 */
 function clearOneGame(topLeftCell) {
   // "スコア入力"シート取得
@@ -50,11 +46,7 @@ function clearOneGame(topLeftCell) {
   const startRow = cell.getRow();
   const col = cell.getColumn();
   
-  // 日付セルをクリア
-  const dateCellRow = startRow + SheetInfo.OFFSET_DATE_POSITION[0];
-  const dateCellCol = col + SheetInfo.OFFSET_DATE_POSITION[1];
-  const dateCell = sheet.getRange(dateCellRow, dateCellCol);
-  dateCell.clearContent();
+  // 日付セルのクリア処理を削除（日付は各ゲームに存在しない）
   
   // 指定されたセルとその下3行（計4行）に処理を行う
   for (let i = 0; i < 4; i++) {
@@ -108,9 +100,10 @@ function clearOneGame(topLeftCell) {
   // 罫線の設定
   setBordersForGame(sheet, startRow, col);
 }
+
 /**
- * ページ内の12試合分のデータに対して数式を挿入する関数
- * @param {string} topLeftCell - ページの開始セル位置 (例: "B18")
+ * ページ内の28試合分のデータに対して数式を挿入する関数
+ * @param {string} topLeftCell - ページの開始セル位置 (例: "B3")
  */
 function clearOnePage(topLeftCell) {
   // "スコア入力"シート取得
@@ -125,7 +118,7 @@ function clearOnePage(topLeftCell) {
   // SheetInfoクラスから試合位置テーブルを取得
   const gamePositions = SheetInfo.positions;
   
-  // 12試合分処理
+  // 28試合分処理
   for (let i = 0; i < gamePositions.length; i++) {
     // 相対位置を取得
     const rowOffset = gamePositions[i][0];
@@ -144,18 +137,19 @@ function clearOnePage(topLeftCell) {
     Logger.log(`試合 ${i+1}: ${gameTopLeftCell} の処理完了`);
   }
   
-  Logger.log(`12試合分の処理が完了しました。開始セル: ${topLeftCell}`);
+  Logger.log(`28試合分の処理が完了しました。開始セル: ${topLeftCell}`);
 }
 
 /**
  * すべてのページのデータをクリアする関数（確認付き）
+ * ※1ページ構成のため、実質clearOnePageと同じ
  */
 function clearAllPage() {
   // 確認ダイアログを表示
   const ui = SpreadsheetApp.getUi();
   const response = ui.alert(
     '確認',
-    'すべてのページのデータをクリアしますか？\nこの操作は取り消せません。',
+    'すべてのデータをクリアしますか？\nこの操作は取り消せません。',
     ui.ButtonSet.YES_NO
   );
   
@@ -168,33 +162,14 @@ function clearAllPage() {
   try {
     Logger.log("clearAllPage開始");
     
-    // 各ページの情報を取得
-    const pageInfo = SheetInfo.pageInfo;
+    // ページ情報を取得（1ページのみ）
+    const pageInfo = SheetInfo.pageInfo[0];
     
-    // 処理結果を格納
-    let successCount = 0;
-    let failedPages = [];
+    Logger.log(`${pageInfo.pageName}のクリアを開始: ${pageInfo.position}`);
+    clearOnePage(pageInfo.position);
+    Logger.log(`${pageInfo.pageName}のクリアが完了`);
     
-    // 各ページを順番に処理
-    pageInfo.forEach(page => {
-      try {
-        Logger.log(`${page.pageName}のクリアを開始: ${page.position}`);
-        clearOnePage(page.position);
-        Logger.log(`${page.pageName}のクリアが完了`);
-        successCount++;
-      } catch (pageError) {
-        Logger.log(`${page.pageName}のクリアに失敗: ${pageError.message}`);
-        failedPages.push(page.pageName);
-      }
-    });
-    
-    // 結果メッセージを作成
-    let message = `クリア完了: ${successCount}/${pageInfo.length}ページ`;
-    if (failedPages.length > 0) {
-      message += `\n失敗したページ: ${failedPages.join(', ')}`;
-    }
-    
-    UIHelper.showAlert(message);
+    UIHelper.showAlert("クリアが完了しました。");
     
   } catch (error) {
     Logger.log(`Error in clearAllPage: ${error.message}`);

@@ -56,7 +56,7 @@ class GameCollector {
  
  /**
   * 1ゲームのデータが正しく入力されているかをチェックするメソッド
-  * @param {string} topLeftCell - チェックするゲームの左上セル (例: "B2")
+  * @param {string} topLeftCell - チェックするゲームの左上セル (例: "B3")
   * @param {Date|string|null} date - デフォルトの日付 (指定がなければnull)
   * @return {boolean} - 検証成功時はtrue、失敗時はfalse
   */
@@ -81,19 +81,21 @@ class GameCollector {
    this.success = false;
    
    // ============ 判定基準1: 日付チェック ============
-   // 左上セルから日付取得（OFFSET_DATE_POSITIONを適用）
-   const dateOffsetRow = SheetInfo.OFFSET_DATE_POSITION[0];
-   const dateOffsetCol = SheetInfo.OFFSET_DATE_POSITION[1];
-   const gameDate = scoreSheet.getRange(row + dateOffsetRow, col + dateOffsetCol).getValue();
+   // 日付はB1から取得（各ゲームには日付なし）
+   let gameDate = date; // 引数で渡された日付を使用
+   
+   if (!gameDate) {
+     // 引数がない場合はB1から取得
+     gameDate = scoreSheet.getRange(SheetInfo.DATE_CELL).getValue();
+   }
    
    // 日付が入力されているか確認
-   if (!gameDate && !date) {
-//     UIHelper.showAlert("日付が入力されていません。");
+   if (!gameDate) {
      return false;
    }
    
    // 日付を設定
-   const gameFormattedDate = gameDate || date;
+   const gameFormattedDate = gameDate;
    
    // ============ IDと得点データの一括取得 ============
    // 名前列、ID列、スコア列の位置を計算
@@ -101,20 +103,21 @@ class GameCollector {
    const idCol = col + SheetInfo.OFFSET_COL_ID;
    const scoreCol = col + SheetInfo.OFFSET_COL_POINT;
    
-   // 4人分のデータを一度に取得（4行 × 3列: 名前、ID、スコア）
-   const values = scoreSheet.getRange(row, nameCol, 4, scoreCol - nameCol + 1).getValues();
+   // 4人分のデータを一度に取得（4行 × 3列: ID、名前、スコア）
+   // チーム表示列は含めない（固定表示のため）
+   const values = scoreSheet.getRange(row, idCol, 4, scoreCol - idCol + 1).getValues();
    
    // 選手データを取得
-   const memberA1Name = values[TEAM_A_MEMBER1_OFFSET][0];
-   const memberA1Id = values[TEAM_A_MEMBER1_OFFSET][1];
-   const memberA2Name = values[TEAM_A_MEMBER2_OFFSET][0];
-   const memberA2Id = values[TEAM_A_MEMBER2_OFFSET][1];
+   const memberA1Id = values[TEAM_A_MEMBER1_OFFSET][0];
+   const memberA1Name = values[TEAM_A_MEMBER1_OFFSET][1];
+   const memberA2Id = values[TEAM_A_MEMBER2_OFFSET][0];
+   const memberA2Name = values[TEAM_A_MEMBER2_OFFSET][1];
    const scoreA = values[TEAM_A_MEMBER1_OFFSET][2];
    
-   const memberB1Name = values[TEAM_B_MEMBER1_OFFSET][0];
-   const memberB1Id = values[TEAM_B_MEMBER1_OFFSET][1];
-   const memberB2Name = values[TEAM_B_MEMBER2_OFFSET][0];
-   const memberB2Id = values[TEAM_B_MEMBER2_OFFSET][1];
+   const memberB1Id = values[TEAM_B_MEMBER1_OFFSET][0];
+   const memberB1Name = values[TEAM_B_MEMBER1_OFFSET][1];
+   const memberB2Id = values[TEAM_B_MEMBER2_OFFSET][0];
+   const memberB2Name = values[TEAM_B_MEMBER2_OFFSET][1];
    const scoreB = values[TEAM_B_MEMBER1_OFFSET][2];
    
    // 全IDの配列を作成（空のIDは除外）
@@ -139,7 +142,7 @@ class GameCollector {
      [memberA1Id]: memberA1Name,
      [memberA2Id]: memberA2Name,
      [memberB1Id]: memberB1Name,
-     [memberB2Id]: memberB2Id
+     [memberB2Id]: memberB2Name
    };
    
    // すべてのIDが会員マスターに登録されているか確認
@@ -229,8 +232,8 @@ class GameCollector {
  
  /**
   * 1シート分のゲームデータを収集する
-  * @param {string} topLeftCell - シートの左上セル位置 (例: "B2")
-  * @param {Date|string|null} previousSheetDate - 前のシートの有効な日付（nullの場合は1枚目）
+  * @param {string} topLeftCell - シートの左上セル位置 (例: "B3")
+  * @param {Date|string|null} previousSheetDate - 前のシートの有効な日付（1ページのみなので使用しない）
   * @return {Object} - 処理結果情報
   */
  getOneSheet(topLeftCell, previousSheetDate = null) {
@@ -245,12 +248,9 @@ class GameCollector {
    const startRow = cell.getRow();
    const startCol = cell.getColumn();
    
-   // バッファをクリアしない（すでに親関数でクリアされているため）
-   // this.buffer = [];
-   
    // 処理結果を格納するオブジェクト
    const result = {
-     totalGames: SheetInfo.positions.length,
+     totalGames: SheetInfo.positions.length, // 28試合
      successCount: 0,
      failedCount: 0,
      failedGames: [],
@@ -265,35 +265,27 @@ class GameCollector {
   const idToName = {};
   for (let i = 1; i < masterData.length; i++) {
     if (masterData[i][1]) { // IDが存在する場合
-      // dispName(列2)ではなく、name(列0)を使用
-      idToName[masterData[i][1].toString()] = masterData[i][0] || masterData[i][1]; // nameがなければIDを使用
+      idToName[masterData[i][1].toString()] = masterData[i][0] || masterData[i][1];
     }
   }   
+   
    // SheetInfoクラスから試合位置テーブルを取得
    const gamePositions = SheetInfo.positions;
    
    // 現在のページ情報を取得
-   const currentPageInfo = SheetInfo.pageInfo.find(page => page.position === topLeftCell);
-   const startGameNumber = currentPageInfo ? currentPageInfo.startGameNo : 1;
+   const currentPageInfo = SheetInfo.pageInfo[0]; // 1ページのみ
+   const startGameNumber = currentPageInfo.startGameNo;
    
-   // 日付の初期化 - 前のシートの日付を使用
-   let currentDate = previousSheetDate;
+   // 日付をB1から取得
+   const dateCell = sheet.getRange(SheetInfo.DATE_CELL);
+   const currentDate = dateCell.getValue();
    
-   // 1枚目のシートで日付がない場合はエラー
-   if (previousSheetDate === null) {
-     // 1枚目のシートの日付セルをチェック
-     const firstGameDateCell = sheet.getRange(startRow + SheetInfo.OFFSET_DATE_POSITION[0], 
-                                             startCol + SheetInfo.OFFSET_DATE_POSITION[1]);
-     const firstGameDate = firstGameDateCell.getValue();
-     
-     if (!firstGameDate) {
-       result.message = "1枚目のシートに日付が入力されていません。";
-       return result;
-     }
-     currentDate = firstGameDate;
+   if (!currentDate) {
+     result.message = "B1セルに日付が入力されていません。";
+     return result;
    }
    
-   // シート内の全ゲームを処理
+   // シート内の全ゲームを処理（28試合）
    for (let i = 0; i < gamePositions.length; i++) {
      // 実際のゲーム番号を計算
      const actualGameNumber = startGameNumber + i;
@@ -330,20 +322,10 @@ class GameCollector {
        continue;
      }
      
-     // 個別ゲームの日付をチェック（このゲームに固有の日付があるか）
-     const gameDateCell = sheet.getRange(gameRow + SheetInfo.OFFSET_DATE_POSITION[0], 
-                                        gameCol + SheetInfo.OFFSET_DATE_POSITION[1]);
-     const gameSpecificDate = gameDateCell.getValue();
-     
-     // ゲーム固有の日付がある場合は更新
-     if (gameSpecificDate) {
-       currentDate = gameSpecificDate;
-     }
-     
      // バッファの現在のサイズを記録
      const bufferSizeBefore = this.buffer.length;
      
-     // getOneGame関数を呼び出して1試合分の処理を実行（現在の有効な日付を渡す）
+     // getOneGame関数を呼び出して1試合分の処理を実行（B1の日付を渡す）
      const success = this.getOneGame(gameTopLeftCell, currentDate);
      
      // 結果を記録
@@ -407,7 +389,6 @@ class GameCollector {
          errorReason = "日付が入力されていません";
        } else {
          // その他のエラーの場合、ID重複やスコア不正などをチェック
-         // ここでは簡略化して、主なエラーメッセージを設定
          if (Logger.getLog().includes("IDが重複しています")) {
            errorReason = "IDが重複しています";
          } else if (Logger.getLog().includes("スコアが正しくありません")) {
@@ -481,74 +462,48 @@ function getAllGame()
    // インスタンスをクリアする代わりに、バッファのみクリア
    gameCollectorInstance.clearBuffer();
    
-   let fullMessage = "";
-   let hasData = false;
-   let totalSuccessCount = 0;
-   let totalFailedCount = 0;
-   let currentValidDate = null; // 現在有効な日付を追跡
+   // 1ページのみ処理
+   const pageInfo = SheetInfo.pageInfo[0];
+   const result = gameCollectorInstance.getOneSheet(pageInfo.position, null);
    
-   // 各ページを処理
-   SheetInfo.pageInfo.forEach((pageInfo, index) => {
-     // 1枚目はnullを渡し、2枚目以降は前のシートの有効日付を渡す
-     const previousDate = index === 0 ? null : currentValidDate;
-     
-     const result = gameCollectorInstance.getOneSheet(pageInfo.position, previousDate);
-     
-     // 1枚目で日付がない場合のエラーハンドリング
-     if (index === 0 && result.message === "1枚目のシートに日付が入力されていません。") {
-       UIHelper.showAlert(result.message);
-       return;
-     }
-     
-     // 有効な日付を更新（次のシートで使用）
-     if (result.validDate) {
-       currentValidDate = result.validDate;
-     }
-     
-     if (result.message && result.message !== "処理対象のゲームがありませんでした。") {
-       fullMessage += `=== ${pageInfo.pageName} ===\n`;
-       fullMessage += result.message;
-       fullMessage += "\n";
-       hasData = true;
-       totalSuccessCount += result.successCount;
-       totalFailedCount += result.failedCount;
-     }
-   });
+   // B1に日付がない場合のエラーハンドリング
+   if (result.message === "B1セルに日付が入力されていません。") {
+     UIHelper.showAlert(result.message);
+     return;
+   }
    
    // メッセージがない場合
-   if (!fullMessage) {
-     fullMessage = "処理対象のゲームがありませんでした。";
-     UIHelper.showAlert(fullMessage);
+   if (!result.message || result.message === "処理対象のゲームがありませんでした。") {
+     UIHelper.showAlert("処理対象のゲームがありませんでした。");
      return;
    }
    
    // データがある場合、保存するか確認
-   if (hasData) {
-     // サマリーを追加
-     fullMessage += `\n=== サマリー ===\n`;
-     fullMessage += `成功: ${totalSuccessCount}件\n`;
-     fullMessage += `失敗: ${totalFailedCount}件\n`;
-     fullMessage += `\n保存しますか？`;
-     
-     // UIを使用してYES/NOダイアログを表示
-     const ui = SpreadsheetApp.getUi();
-     const response = ui.alert(
-       'データ保存の確認',
-       fullMessage,
-       ui.ButtonSet.YES_NO
-     );
-     
-     // YESが選択された場合、データを保存
-     if (response === ui.Button.YES) {
-       const saveResult = saveBufferData();
-       if (saveResult.success) {
-         UIHelper.showAlert(`データを保存しました。\n保存件数: ${saveResult.savedCount}件`);
-       } else {
-         UIHelper.showAlert(`保存中にエラーが発生しました: ${saveResult.error}`);
-       }
+   let fullMessage = `=== ${pageInfo.pageName} ===\n`;
+   fullMessage += result.message;
+   fullMessage += `\n=== サマリー ===\n`;
+   fullMessage += `成功: ${result.successCount}件\n`;
+   fullMessage += `失敗: ${result.failedCount}件\n`;
+   fullMessage += `\n保存しますか？`;
+   
+   // UIを使用してYES/NOダイアログを表示
+   const ui = SpreadsheetApp.getUi();
+   const response = ui.alert(
+     'データ保存の確認',
+     fullMessage,
+     ui.ButtonSet.YES_NO
+   );
+   
+   // YESが選択された場合、データを保存
+   if (response === ui.Button.YES) {
+     const saveResult = saveBufferData();
+     if (saveResult.success) {
+       UIHelper.showAlert(`データを保存しました。\n保存件数: ${saveResult.savedCount}件`);
      } else {
-       UIHelper.showAlert("保存をキャンセルしました。");
+       UIHelper.showAlert(`保存中にエラーが発生しました: ${saveResult.error}`);
      }
+   } else {
+     UIHelper.showAlert("保存をキャンセルしました。");
    }
  } catch (error) {
    UIHelper.showAlert(`エラーが発生しました: ${error.message}`);
@@ -613,14 +568,6 @@ function getMaxGameNumber(gameDate) {
  
  // バッファから最大ゲーム番号を取得
  return gameCollectorInstance.getBufferMaxGameNumber(gameDate);
- 
-/* const bufferMaxNo = gameCollectorInstance.getBufferMaxGameNumber(gameDate);
- 
- // DBから最大ゲーム番号を取得
- const dbMaxNo = getDBMaxGameNumber(gameDate);
- 
- // バッファとDBの最大値を比較して大きい方を返す
- return Math.max(bufferMaxNo, dbMaxNo);*/
 }
 
 /**
