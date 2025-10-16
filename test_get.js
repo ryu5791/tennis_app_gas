@@ -17,7 +17,8 @@ function cleanupAfterTests() {
 }
 
 /**
- * getOneGame関数の単体テスト - 正常系
+ * test_getOneGame_B3_OK関数の修正版
+ * スコア位置をD列からE列に修正
  */
 function test_getOneGame_B3_OK() {
   // テスト環境の準備
@@ -42,10 +43,10 @@ function test_getOneGame_B3_OK() {
     scoreSheet.getRange(SheetInfo.DATE_CELL).setValue(new Date("2025/04/15")); // B1に日付
     scoreSheet.getRange("C3").setValue(407);                   // チームA ID1
     scoreSheet.getRange("C4").setValue(39);                    // チームA ID2
-    scoreSheet.getRange("D3").setValue(2);                     // チームA スコア
+    scoreSheet.getRange("E3").setValue(2);                     // チームA スコア ← 修正: D3 → E3
     scoreSheet.getRange("C5").setValue(491);                   // チームB ID1
     scoreSheet.getRange("C6").setValue(66);                    // チームB ID2
-    scoreSheet.getRange("D5").setValue(5);                     // チームB スコア
+    scoreSheet.getRange("E5").setValue(5);                     // チームB スコア ← 修正: D5 → E5
     
     // テスト実行
     const success = gameCollectorInstance.getOneGame("B3");
@@ -120,7 +121,8 @@ function test_getOneGame_B3_OK() {
 }
 
 /**
- * getOneGame関数の単体テスト - 日付なしケース（失敗ケース）
+ * test_getOneGame_B8_NG関数の修正版
+ * スコア位置をD列からE列に修正
  */
 function test_getOneGame_B8_NG() {
   // テスト環境の準備
@@ -145,10 +147,10 @@ function test_getOneGame_B8_NG() {
     scoreSheet.getRange(SheetInfo.DATE_CELL).setValue("");   // B1に日付なし
     scoreSheet.getRange("C8").setValue(407);                 // チームA ID1
     scoreSheet.getRange("C9").setValue(39);                  // チームA ID2
-    scoreSheet.getRange("D8").setValue(5);                   // チームA スコア
+    scoreSheet.getRange("E8").setValue(5);                   // チームA スコア ← 修正: D8 → E8
     scoreSheet.getRange("C10").setValue(491);                // チームB ID1
     scoreSheet.getRange("C11").setValue(66);                 // チームB ID2
-    scoreSheet.getRange("D10").setValue(0);                  // チームB スコア
+    scoreSheet.getRange("E10").setValue(0);                  // チームB スコア ← 修正: D10 → E10
     
     // テスト実行
     const success = gameCollectorInstance.getOneGame("B8");
@@ -177,7 +179,8 @@ function test_getOneGame_B8_NG() {
 }
 
 /**
- * getOneGame関数の単体テスト - 日付引数指定のケース（成功ケース）
+ * test_getOneGame_B8_OK関数の修正版
+ * スコア位置をD列からE列に修正
  */
 function test_getOneGame_B8_OK() {
   // テスト環境の準備
@@ -200,10 +203,10 @@ function test_getOneGame_B8_OK() {
     // テストデータを設定（B1の日付は関係なく引数で渡す）
     scoreSheet.getRange("C8").setValue(407);                 // チームA ID1
     scoreSheet.getRange("C9").setValue(39);                  // チームA ID2
-    scoreSheet.getRange("D8").setValue(5);                   // チームA スコア
+    scoreSheet.getRange("E8").setValue(5);                   // チームA スコア ← 修正: D8 → E8
     scoreSheet.getRange("C10").setValue(491);                // チームB ID1
     scoreSheet.getRange("C11").setValue(66);                 // チームB ID2
-    scoreSheet.getRange("D10").setValue(0);                  // チームB スコア
+    scoreSheet.getRange("E10").setValue(0);                  // チームB スコア ← 修正: D10 → E10
     
     // テスト実行 - 日付引数を指定
     const success = gameCollectorInstance.getOneGame("B8", "2025/04/15");
@@ -243,7 +246,8 @@ function test_getOneGame_B8_OK() {
 }
 
 /**
- * getOneGame関数の単体テスト - ID重複のケース（失敗ケース）
+ * test_getOneGame_B13_NG関数の修正版
+ * スコア位置をD列からE列に修正
  */
 function test_getOneGame_B13_NG() {
   // テスト環境の準備
@@ -266,10 +270,10 @@ function test_getOneGame_B13_NG() {
     // テストデータを設定（ID重複）
     scoreSheet.getRange("C13").setValue(66);                 // チームA ID1
     scoreSheet.getRange("C14").setValue(39);                 // チームA ID2
-    scoreSheet.getRange("D13").setValue(3);                  // チームA スコア
+    scoreSheet.getRange("E13").setValue(3);                  // チームA スコア ← 修正: D13 → E13
     scoreSheet.getRange("C15").setValue(73);                 // チームB ID1
     scoreSheet.getRange("C16").setValue(39);                 // チームB ID2（重複）
-    scoreSheet.getRange("D15").setValue(5);                  // チームB スコア
+    scoreSheet.getRange("E15").setValue(5);                  // チームB スコア ← 修正: D15 → E15
     
     // テスト実行 - 日付引数を指定
     const success = gameCollectorInstance.getOneGame("B13", "2025/04/15");
@@ -297,7 +301,8 @@ function test_getOneGame_B13_NG() {
 }
 
 /**
- * getOneGame関数の単体テスト - スコア不正ケース（失敗ケース）
+ * test_getOneGame_B18_NG関数の修正版
+ * スコア位置をD列からE列に修正
  */
 function test_getOneGame_B18_NG() {
   // テスト環境の準備
@@ -322,10 +327,10 @@ function test_getOneGame_B18_NG() {
     scoreSheet.getRange(SheetInfo.DATE_CELL).setValue(new Date("2025/04/17")); // B1に日付
     scoreSheet.getRange("C18").setValue(66);                 // チームA ID1
     scoreSheet.getRange("C19").setValue(39);                 // チームA ID2
-    scoreSheet.getRange("D18").setValue(3);                  // チームA スコア
+    scoreSheet.getRange("E18").setValue(3);                  // チームA スコア ← 修正: D18 → E18
     scoreSheet.getRange("C20").setValue(73);                 // チームB ID1
     scoreSheet.getRange("C21").setValue(491);                // チームB ID2
-    scoreSheet.getRange("D20").setValue(3);                  // チームB スコア（不正）
+    scoreSheet.getRange("E20").setValue(3);                  // チームB スコア（不正） ← 修正: D20 → E20
     
     // テスト実行
     const success = gameCollectorInstance.getOneGame("B18");
