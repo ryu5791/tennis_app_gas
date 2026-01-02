@@ -6,6 +6,8 @@ function onOpen() {
     .addItem('全ページクリア', 'clearAllPage')
     .addItem('登録(1ゲーム)', 'registerData')
     .addItem('登録(全ゲーム)', 'getAllGame')
+    .addSeparator()
+    .addItem('スコア集計', 'aggregateScores')  // 新規追加
     .addToUi();
 }
 
