@@ -1,4 +1,24 @@
 /**
+ * アプリケーションバージョン
+ */
+const APP_VERSION = '1.0.1';
+
+/**
+ * バージョン情報を取得する
+ * @return {string} - バージョン文字列
+ */
+function getVersion() {
+  return APP_VERSION;
+}
+
+/**
+ * バージョン情報をログに出力する
+ */
+function logVersion() {
+  Logger.log(`テニススコア管理システム v${APP_VERSION}`);
+}
+
+/**
  * UI操作とログ出力を扱うヘルパークラス
  */
 class UIHelper {
