@@ -489,23 +489,31 @@ function getParticipationDays(scoreData, startDate, endDate) {
  * @return {Object} ID別の参加日数
  */
 function getParticipationDaysFromSheet(sheet, startDate, endDate) {
-  // A列: 会員ID, B列: 参加日数
+  // シート構造: 4行目がヘッダー、6行目からデータ
+  // A列: ID, B列: 会員名, C列: 参加日数
   const lastRow = sheet.getLastRow();
-  if (lastRow <= 1) {
+  const dataStartRow = 6;  // データ開始行
+  
+  if (lastRow < dataStartRow) {
     return {};
   }
   
-  const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  // A列(ID)とC列(参加日数)を取得
+  const numRows = lastRow - dataStartRow + 1;
+  const idData = sheet.getRange(dataStartRow, 1, numRows, 1).getValues();   // A列
+  const daysData = sheet.getRange(dataStartRow, 3, numRows, 1).getValues(); // C列
   const result = {};
   
   // 配列を一度だけループして辞書を構築
-  data.forEach(row => {
-    const id = row[0];
-    const days = row[1];
+  for (let i = 0; i < numRows; i++) {
+    const id = idData[i][0];
+    const days = daysData[i][0];
     if (id !== '' && id !== null && days !== '' && days !== null) {
       result[id] = Number(days);
     }
-  });
+  }
+  
+  Logger.log(`参加日数シートから ${Object.keys(result).length} 件のデータを取得しました`);
   
   return result;
 }
