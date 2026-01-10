@@ -1,6 +1,7 @@
 /**
  * スコア集計機能
  * 期間を指定して会員とゲストのスコアを集計する
+ * v1.0.6 - 書式改善、HTMLダイアログ対応
  */
 
 // マスターデータのキャッシュ（関数実行ごとにクリア）
@@ -57,17 +58,108 @@ function aggregateScores() {
     // キャッシュをクリア
     clearMasterDataCache();
     
-    // 日付入力ダイアログを表示
-    const dateRange = showDateInputDialog();
+    // HTMLダイアログを表示（非同期処理）
+    showDateInputDialog();
+    // 処理はprocessDateInput関数で継続
     
-    if (!dateRange) {
-      UIHelper.showAlert("集計をキャンセルしました。");
+  } catch (error) {
+    Logger.log(`Error in aggregateScores: ${error.message}`);
+    UIHelper.showAlert(`エラーが発生しました: ${error.message}`);
+  }
+}
+
+/**
+ * 日付入力HTMLダイアログを表示
+ */
+function showDateInputDialog() {
+  const html = HtmlService.createHtmlOutput(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <base target="_top">
+      <style>
+        body { font-family: Arial, sans-serif; padding: 15px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"] { 
+          width: 200px; padding: 8px; font-size: 14px; 
+          border: 1px solid #ccc; border-radius: 4px;
+        }
+        .buttons { margin-top: 20px; text-align: right; }
+        button { padding: 8px 20px; margin-left: 10px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; }
+        .ok-btn { background-color: #4285f4; color: white; }
+        .ok-btn:hover { background-color: #3367d6; }
+        .cancel-btn { background-color: #f1f1f1; color: #333; }
+        .cancel-btn:hover { background-color: #e0e0e0; }
+      </style>
+    </head>
+    <body>
+      <div class="form-group">
+        <label>開始日:</label>
+        <input type="text" id="startDate" placeholder="例: 2025/01/01" autofocus>
+      </div>
+      <div class="form-group">
+        <label>終了日:</label>
+        <input type="text" id="endDate" placeholder="例: 2025/12/31">
+      </div>
+      <div class="buttons">
+        <button class="cancel-btn" onclick="google.script.host.close()">キャンセル</button>
+        <button class="ok-btn" onclick="submitDates()">OK</button>
+      </div>
+      <script>
+        document.getElementById('startDate').addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('endDate').focus();
+          }
+        });
+        document.getElementById('endDate').addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submitDates();
+          }
+        });
+        
+        function submitDates() {
+          const startDate = document.getElementById('startDate').value.trim();
+          const endDate = document.getElementById('endDate').value.trim();
+          if (!startDate || !endDate) { 
+            alert('両方の日付を入力してください'); 
+            return; 
+          }
+          google.script.run
+            .withSuccessHandler(function() { google.script.host.close(); })
+            .withFailureHandler(function(e) { alert('エラー: ' + e.message); })
+            .processDateInput(startDate, endDate);
+        }
+      </script>
+    </body>
+    </html>
+  `).setWidth(300).setHeight(200);
+  
+  SpreadsheetApp.getUi().showModalDialog(html, '集計期間の設定');
+}
+
+/**
+ * HTMLダイアログからの日付入力を処理
+ * @param {string} startDateStr - 開始日文字列
+ * @param {string} endDateStr - 終了日文字列
+ */
+function processDateInput(startDateStr, endDateStr) {
+  try {
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      UIHelper.showAlert("日付の形式が正しくありません。");
       return;
     }
     
-    const { startDate, endDate } = dateRange;
+    if (startDate > endDate) {
+      UIHelper.showAlert("開始日は終了日より前の日付を指定してください。");
+      return;
+    }
     
-    // 集計処理を実行
     const result = executeAggregation(startDate, endDate);
     
     if (result.success) {
@@ -80,74 +172,8 @@ function aggregateScores() {
     } else {
       UIHelper.showAlert(`集計中にエラーが発生しました: ${result.error}`);
     }
-    
   } catch (error) {
-    Logger.log(`Error in aggregateScores: ${error.message}`);
-    UIHelper.showAlert(`エラーが発生しました: ${error.message}`);
-  }
-}
-
-/**
- * 日付入力ダイアログを表示
- * @return {Object|null} {startDate: Date, endDate: Date} または null
- */
-function showDateInputDialog() {
-  const ui = SpreadsheetApp.getUi();
-  
-  // 開始日の入力
-  const startDateResponse = ui.prompt(
-    '集計期間の設定',
-    '開始日を入力してください（例: 2025/01/01）:',
-    ui.ButtonSet.OK_CANCEL
-  );
-  
-  if (startDateResponse.getSelectedButton() !== ui.Button.OK) {
-    return null;
-  }
-  
-  const startDateStr = startDateResponse.getResponseText().trim();
-  if (!startDateStr) {
-    UIHelper.showAlert("開始日が入力されていません。");
-    return null;
-  }
-  
-  // 終了日の入力
-  const endDateResponse = ui.prompt(
-    '集計期間の設定',
-    '終了日を入力してください（例: 2025/12/31）:',
-    ui.ButtonSet.OK_CANCEL
-  );
-  
-  if (endDateResponse.getSelectedButton() !== ui.Button.OK) {
-    return null;
-  }
-  
-  const endDateStr = endDateResponse.getResponseText().trim();
-  if (!endDateStr) {
-    UIHelper.showAlert("終了日が入力されていません。");
-    return null;
-  }
-  
-  // 日付の妥当性チェック
-  try {
-    const startDate = new Date(startDateStr);
-    const endDate = new Date(endDateStr);
-    
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      UIHelper.showAlert("日付の形式が正しくありません。");
-      return null;
-    }
-    
-    if (startDate > endDate) {
-      UIHelper.showAlert("開始日は終了日より前の日付を指定してください。");
-      return null;
-    }
-    
-    return { startDate, endDate };
-    
-  } catch (error) {
-    UIHelper.showAlert("日付の変換に失敗しました: " + error.message);
-    return null;
+    UIHelper.showAlert("日付の処理中にエラーが発生しました: " + error.message);
   }
 }
 
@@ -179,25 +205,33 @@ function executeAggregation(startDate, endDate) {
     const { members, guests } = classifyPlayers(aggregatedData, hdcpData, participationDays);
     Logger.log(`会員: ${members.length}名, ゲスト: ${guests.length}名`);
     
+    // 5.5. グロス順位を計算（上位10名）
+    calculateGrossRank(members);
+    
     // 6. 会員の参加日数閾値を計算（20番目）
     const threshold = calculateThreshold(members);
     Logger.log(`参加日数閾値: ${threshold}日`);
     
-    // 7. 閾値以上の会員を抽出してNet順にソート
+    // 7. 閾値以上の会員、または備考（前期/前々期の順位）がある会員を抽出
     const qualifiedMembers = members
-      .filter(m => m.participationDays >= threshold)
+      .filter(m => {
+        // 参加日数が閾値以上
+        if (m.participationDays >= threshold) return true;
+        // 備考に「前期」または「前々期」が含まれている場合も対象
+        if ((m.prevPrevPeriod && m.prevPrevPeriod.includes('前々期')) || 
+            (m.prevPeriod && m.prevPeriod.includes('前期'))) return true;
+        return false;
+      })
       .sort((a, b) => b.net - a.net);
-    Logger.log(`閾値以上の会員: ${qualifiedMembers.length}名`);
+    Logger.log(`閾値以上または備考ありの会員: ${qualifiedMembers.length}名`);
     
-    // 8. スコア集計シートに出力
-    outputToSheet(qualifiedMembers, guests, threshold, startDate, endDate);
+    // 8. スコア集計シートに出力（全会員を出力）
+    outputToSheet(members, guests, threshold, startDate, endDate);
     
     // 9. スコア集計（試合数加味）シートを作成
     outputWeightedSheet(qualifiedMembers, members, guests, threshold, startDate, endDate);
     
-    // 10. 月別参加日数シートを出力
-    const monthlyData = calculateMonthlyParticipation(scoreData, startDate, endDate);
-    outputMonthlyParticipationSheet(monthlyData, hdcpData, startDate, endDate);
+    // 参加日数シートはインプット用なので書き込みは行わない
     
     return {
       success: true,
@@ -211,151 +245,6 @@ function executeAggregation(startDate, endDate) {
       success: false,
       error: error.message
     };
-  }
-}
-
-/**
- * 月別参加日数を計算
- * @param {Array} scoreData - スコアデータ
- * @param {Date} startDate - 開始日
- * @param {Date} endDate - 終了日
- * @return {Object} ID別の月別参加日数 {id: {1: 3, 2: 5, ...}}
- */
-function calculateMonthlyParticipation(scoreData, startDate, endDate) {
-  const monthlyData = {};
-  
-  scoreData.forEach(record => {
-    const id = record.id;
-    const date = new Date(record.date);
-    const month = date.getMonth() + 1; // 1-12
-    
-    if (!monthlyData[id]) {
-      monthlyData[id] = {};
-      for (let m = 1; m <= 12; m++) {
-        monthlyData[id][m] = new Set(); // 重複を排除するためSet使用
-      }
-    }
-    
-    // その月の日付を記録
-    const dateStr = formatDate(date);
-    monthlyData[id][month].add(dateStr);
-  });
-  
-  // Setをカウント数に変換
-  const result = {};
-  Object.keys(monthlyData).forEach(id => {
-    result[id] = {};
-    for (let m = 1; m <= 12; m++) {
-      result[id][m] = monthlyData[id][m].size;
-    }
-    // 年間合計を計算
-    result[id].total = Object.values(result[id]).reduce((sum, count) => sum + count, 0);
-  });
-  
-  return result;
-}
-
-/**
- * 月別参加日数シートを出力
- * @param {Object} monthlyData - 月別参加日数データ
- * @param {Object} hdcpData - HDCP情報
- * @param {Date} startDate - 開始日
- * @param {Date} endDate - 終了日
- */
-function outputMonthlyParticipationSheet(monthlyData, hdcpData, startDate, endDate) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const year = startDate.getFullYear();
-  
-  // シートを作成または取得
-  let sheet = ss.getSheetByName('参加日数');
-  if (!sheet) {
-    sheet = ss.insertSheet('参加日数');
-  } else {
-    sheet.clear();
-  }
-  
-  // タイトル行
-  sheet.getRange(1, 2).setValue(`${year}年`);
-  sheet.getRange(1, 7).setValue('年間レッツ会計報告 及び コート使用状況');
-  
-  // ヘッダー行
-  const headers = ['ID', '会員名', '備考欄', '年会費'];
-  const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-  sheet.getRange(4, 1, 1, 4).setValues([headers]);
-  sheet.getRange(5, 4).setValue('年会員');
-  sheet.getRange(5, 5, 1, months.length).setValues([months]);  // E列(5列目)から月名を配置
-  
-  let currentRow = 6;
-  
-  // 会員のみを抽出してソート（hdcpDataは既に辞書型なのでO(1)で検索可能）
-  const members = Object.keys(monthlyData)
-    .filter(id => hdcpData[id] && hdcpData[id].isMember)
-    .sort((a, b) => Number(a) - Number(b));
-  
-  // データ行を出力
-  members.forEach(id => {
-    const name = getPlayerName(id);
-    const row = [id, name, '', 3]; // 年会費は3（固定値、必要に応じて変更）
-    
-    // 各月の参加日数を追加
-    for (let m = 1; m <= 12; m++) {
-      const count = monthlyData[id][m] || 0;
-      row.push(count > 0 ? count : '－');
-    }
-    
-    sheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
-    currentRow++;
-  });
-  
-  // 書式設定
-  formatMonthlyParticipationSheet(sheet, members.length);
-}
-
-/**
- * 月別参加日数シートの書式を設定
- * @param {Sheet} sheet - 対象シート
- * @param {number} memberCount - 会員数
- */
-function formatMonthlyParticipationSheet(sheet, memberCount) {
-  // 列幅調整
-  sheet.setColumnWidth(1, 60);   // ID
-  sheet.setColumnWidth(2, 120);  // 会員名
-  sheet.setColumnWidth(3, 100);  // 備考欄
-  sheet.setColumnWidth(4, 70);   // 年会費
-  
-  // 月の列幅
-  for (let col = 5; col <= 16; col++) {
-    sheet.setColumnWidth(col, 50);
-  }
-  
-  // タイトル行の書式
-  sheet.getRange(1, 2).setFontSize(14).setFontWeight('bold');
-  sheet.getRange(1, 7).setFontSize(12).setFontWeight('bold');
-  
-  // ヘッダー行の書式（4-5行目）
-  sheet.getRange(4, 1, 2, 16)
-    .setBackground('#D9EAD3')
-    .setFontWeight('bold')
-    .setHorizontalAlignment('center');
-  
-  // データ行の書式
-  if (memberCount > 0) {
-    // ID列を中央揃え
-    sheet.getRange(6, 1, memberCount, 1).setHorizontalAlignment('center');
-    
-    // 年会費と月の列を中央揃え
-    sheet.getRange(6, 4, memberCount, 13).setHorizontalAlignment('center');
-    
-    // 月の列（参加日数）に色付け（交互に）
-    for (let col = 5; col <= 16; col += 2) {
-      sheet.getRange(6, col, memberCount, 1).setBackground('#E8F4E8');
-    }
-    
-    // 罫線
-    sheet.getRange(4, 1, memberCount + 2, 16).setBorder(
-      true, true, true, true, true, true,
-      'black', SpreadsheetApp.BorderStyle.SOLID
-    );
   }
 }
 
@@ -480,29 +369,38 @@ function getParticipationDays(scoreData, startDate, endDate) {
  * @return {Object} ID別の参加日数
  */
 function getParticipationDaysFromSheet(sheet, startDate, endDate) {
-  // A列: 会員ID, B列: 参加日数
+  // シート構造: 4行目がヘッダー、6行目からデータ
+  // A列: ID, Q列(17列目): 参加日数合計
   const lastRow = sheet.getLastRow();
-  if (lastRow <= 1) {
+  const dataStartRow = 6;  // データ開始行
+  
+  if (lastRow < dataStartRow) {
     return {};
   }
   
-  const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  // A列(ID)とQ列(参加日数合計)を取得
+  const numRows = lastRow - dataStartRow + 1;
+  const idData = sheet.getRange(dataStartRow, 1, numRows, 1).getValues();    // A列
+  const daysData = sheet.getRange(dataStartRow, 17, numRows, 1).getValues(); // Q列(17列目)
   const result = {};
   
   // 配列を一度だけループして辞書を構築
-  data.forEach(row => {
-    const id = row[0];
-    const days = row[1];
+  for (let i = 0; i < numRows; i++) {
+    const id = idData[i][0];
+    const days = daysData[i][0];
     if (id !== '' && id !== null && days !== '' && days !== null) {
       result[id] = Number(days);
     }
-  });
+  }
+  
+  Logger.log(`参加日数シートから ${Object.keys(result).length} 件のデータを取得しました（Q列参照）`);
   
   return result;
 }
 
 /**
  * HDCP情報を取得（辞書型で返す）
+ * v1.0.6: P列(前々期)、Q列(前期)の取得を追加
  * @return {Object} ID別のHDCP情報
  */
 function getHDCPData() {
@@ -519,7 +417,7 @@ function getHDCPData() {
     return {};
   }
   
-  // A列=ID, N列(14列目)=新ハンディ, P列(16列目)=前々期, Q列(17列目)=前期, T列(20列目)=会員フラグ
+  // A列=ID, N列(14列目)=新ハンディ, O列(15列目)=備考, P列(16列目)=前々期, Q列(17列目)=前期, T列(20列目)=会員フラグ
   const data = hdcpSheet.getRange(2, 1, lastRow - 1, 20).getValues();
   const result = {};
   
@@ -532,14 +430,16 @@ function getHDCPData() {
     // T列が厳密に1の場合のみ会員とする
     const isMember = (memberFlag === 1 || memberFlag === "1" || Number(memberFlag) === 1);
     const hdcp = row[13] || 0;  // N列（インデックス13）新ハンディ
+    const remarks = row[14] || '';  // O列（インデックス14）備考欄
     const prevPrevPeriod = row[15] || '';  // P列（インデックス15）前々期
-    const prevPeriod = row[16] || '';  // Q列（インデックス16）前期
+    const prevPeriod = row[16] || '';       // Q列（インデックス16）前期
     
     result[id] = {
       isMember: isMember,
       hdcp: Number(hdcp),
-      prevPrevPeriod: prevPrevPeriod,  // 前々期（青色で表示）
-      prevPeriod: prevPeriod  // 前期（赤色で表示）
+      remarks: String(remarks).trim(),
+      prevPrevPeriod: String(prevPrevPeriod).trim(),  // 前々期（青色で表示）
+      prevPeriod: String(prevPeriod).trim()           // 前期（赤色で表示）
     };
     
     Logger.log(`ID: ${id}, T列の値: ${memberFlag}, 会員判定: ${isMember}`);
@@ -550,6 +450,7 @@ function getHDCPData() {
 
 /**
  * プレイヤーを会員とゲストに分類
+ * v1.0.6: 前期/前々期情報の追加
  * @param {Object} aggregatedData - 集計データ
  * @param {Object} hdcpData - HDCP情報
  * @param {Object} participationDays - 参加日数
@@ -561,7 +462,7 @@ function classifyPlayers(aggregatedData, hdcpData, participationDays) {
   
   Object.values(aggregatedData).forEach(player => {
     const id = player.id;
-    const hdcpInfo = hdcpData[id] || { isMember: false, hdcp: 0, prevPrevPeriod: '', prevPeriod: '' };
+    const hdcpInfo = hdcpData[id] || { isMember: false, hdcp: 0, remarks: '', prevPrevPeriod: '', prevPeriod: '' };
     const days = participationDays[id] || player.participationDaysDB;
     
     // Net = Gross + HDCP（ハンディキャップを加算）
@@ -575,8 +476,9 @@ function classifyPlayers(aggregatedData, hdcpData, participationDays) {
       hdcp: hdcpInfo.hdcp,
       net: net,
       participationDays: days,
-      prevPrevPeriod: hdcpInfo.prevPrevPeriod || '',  // 前々期
-      prevPeriod: hdcpInfo.prevPeriod || ''  // 前期
+      remarks: hdcpInfo.remarks || '',
+      prevPrevPeriod: hdcpInfo.prevPrevPeriod || '',  // 前々期（青色で表示）
+      prevPeriod: hdcpInfo.prevPeriod || ''           // 前期（赤色で表示）
     };
     
     if (hdcpInfo.isMember) {
@@ -610,14 +512,32 @@ function calculateThreshold(members) {
 }
 
 /**
+ * グロス順位を計算（上位10名）
+ * @param {Array} members - 会員データ
+ */
+function calculateGrossRank(members) {
+  // グロス降順でソート（コピーを作成）
+  const sortedByGross = [...members].sort((a, b) => b.gross - a.gross);
+  
+  // 上位10名にグロス順位を設定
+  sortedByGross.forEach((member, index) => {
+    if (index < 10) {
+      member.grossRank = index + 1;
+    } else {
+      member.grossRank = '';
+    }
+  });
+}
+
+/**
  * スコア集計シートに結果を出力
- * @param {Array} qualifiedMembers - 閾値以上の会員
+ * @param {Array} members - 全会員
  * @param {Array} guests - ゲスト
  * @param {number} threshold - 参加日数閾値
  * @param {Date} startDate - 開始日
  * @param {Date} endDate - 終了日
  */
-function outputToSheet(qualifiedMembers, guests, threshold, startDate, endDate) {
+function outputToSheet(members, guests, threshold, startDate, endDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // スコア集計シートを作成または取得
@@ -628,19 +548,10 @@ function outputToSheet(qualifiedMembers, guests, threshold, startDate, endDate) 
     outputSheet.clear();
   }
   
-  // ヘッダー情報を出力
-  outputSheet.getRange(1, 1).setValue('集計期間:');
-  outputSheet.getRange(1, 2).setValue(`${formatDate(startDate)} ～ ${formatDate(endDate)}`);
-  outputSheet.getRange(2, 1).setValue('参加日数閾値:');
-  outputSheet.getRange(2, 2).setValue(`${threshold}日以上`);
+  let currentRow = 1;
   
-  let currentRow = 4;
-  
-  // ========== 会員セクション ==========
-  outputSheet.getRange(currentRow, 1).setValue('【会員】');
-  currentRow++;
-  
-  const memberHeaders = ['順位', '会員ID', '会員名', '合計', '試合数', 'Gross', 'HDCP', 'Net', 'クロス順位', '参加日数', '備考'];
+  // ヘッダー行
+  const memberHeaders = ['順位', '会員ＩＤ', '会員名', '合計', '試合数', 'Gross', 'HDCP', 'Net', 'ｸﾞﾛｽ順位', '参加日数', '備考'];
   outputSheet.getRange(currentRow, 1, 1, memberHeaders.length).setValues([memberHeaders]);
   outputSheet.getRange(currentRow, 1, 1, memberHeaders.length)
     .setBackground('#4A86E8')
@@ -648,11 +559,11 @@ function outputToSheet(qualifiedMembers, guests, threshold, startDate, endDate) 
     .setFontWeight('bold');
   currentRow++;
   
-  // 会員データを会員ID昇順でソート
-  qualifiedMembers.sort((a, b) => Number(a.id) - Number(b.id));
+  // 会員データを会員ID昇順でソート（非破壊）
+  const sortedMembers = [...members].sort((a, b) => Number(a.id) - Number(b.id));
   
   // 会員データを出力
-  qualifiedMembers.forEach((member, index) => {
+  sortedMembers.forEach((member, index) => {
     const name = getPlayerName(member.id);
     const row = [
       index + 1,
@@ -663,34 +574,22 @@ function outputToSheet(qualifiedMembers, guests, threshold, startDate, endDate) 
       member.gross.toFixed(3),
       member.hdcp.toFixed(3),
       member.net.toFixed(3),
-      '',  // クロス順位
+      member.grossRank || '',  // グロス順位
       member.participationDays,
-      ''   // 備考
+      member.remarks || ''   // 備考
     ];
     outputSheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
     currentRow++;
   });
   
-  currentRow += 2;
+  // ゲストデータを会員ID昇順でソート（非破壊）
+  const sortedGuests = [...guests].sort((a, b) => Number(a.id) - Number(b.id));
   
-  // ========== ゲストセクション ==========
-  outputSheet.getRange(currentRow, 1).setValue('【ゲスト】');
-  currentRow++;
-  
-  outputSheet.getRange(currentRow, 1, 1, memberHeaders.length).setValues([memberHeaders]);
-  outputSheet.getRange(currentRow, 1, 1, memberHeaders.length)
-    .setBackground('#4A86E8')
-    .setFontColor('white')
-    .setFontWeight('bold');
-  currentRow++;
-  
-  // ゲストデータを会員ID昇順でソート
-  guests.sort((a, b) => Number(a.id) - Number(b.id));
-  
-  guests.forEach((guest, index) => {
+  // ゲストデータを出力（順位欄に「ゲスト」を表示）
+  sortedGuests.forEach((guest) => {
     const name = getPlayerName(guest.id);
     const row = [
-      index + 1,
+      'ゲスト',  // 順位欄に「ゲスト」
       guest.id,
       name,
       guest.totalPoints,
@@ -700,18 +599,19 @@ function outputToSheet(qualifiedMembers, guests, threshold, startDate, endDate) 
       guest.net.toFixed(3),
       '',
       guest.participationDays,
-      ''
+      guest.remarks || ''
     ];
     outputSheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
     currentRow++;
   });
   
   // 書式設定
-  formatAggregationSheet(outputSheet, qualifiedMembers.length, guests.length);
+  formatAggregationSheet(outputSheet, members.length, guests.length);
 }
 
 /**
  * スコア集計（試合数加味）シートに結果を出力
+ * v1.0.6: 画像仕様に合わせた全面書き換え
  * @param {Array} qualifiedMembers - 閾値以上の会員
  * @param {Array} allMembers - 全会員（閾値未満含む）
  * @param {Array} guests - ゲスト
@@ -723,42 +623,41 @@ function outputWeightedSheet(qualifiedMembers, allMembers, guests, threshold, st
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // スコア集計（試合数加味）シートを作成または取得
-  let sheet = ss.getSheetByName('スコア集計（試合数加味）');
-  if (!sheet) {
-    sheet = ss.insertSheet('スコア集計（試合数加味）');
+  let weightedSheet = ss.getSheetByName('スコア集計（試合数加味）');
+  if (!weightedSheet) {
+    weightedSheet = ss.insertSheet('スコア集計（試合数加味）');
   } else {
-    sheet.clear();
+    weightedSheet.clear();
   }
   
-  // ヘッダー行
-  const headers = ['順位', '会員ID', '会員名', '合計', '試合数', 'Gross', 'HDCP', 'Net', 'ｸﾞﾛｽ順位', '参加日数', '備考'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length)
+  // ===== グロス1位のIDを特定 =====
+  let maxGrossId = null;
+  let maxGross = -Infinity;
+  allMembers.forEach(m => {
+    if (m.gross > maxGross) {
+      maxGross = m.gross;
+      maxGrossId = m.id;
+    }
+  });
+  
+  let currentRow = 1;
+  
+  // ===== 行1: ヘッダー行（緑背景 #6AA84F、白文字）=====
+  const headers = ['順位', '会員ＩＤ', '会員名', '合計', '試合数', 'Gross', 'HDCP', 'Net', 'ｸﾞﾛｽ順位', '参加日数', '備考'];
+  weightedSheet.getRange(currentRow, 1, 1, headers.length).setValues([headers]);
+  weightedSheet.getRange(currentRow, 1, 1, headers.length)
     .setBackground('#6AA84F')
     .setFontColor('white')
     .setFontWeight('bold');
+  currentRow++;
   
-  let currentRow = 2;
+  // ===== 行2〜: 閾値以上の会員をNet順降順でソート =====
+  const sortedQualified = [...qualifiedMembers].sort((a, b) => b.net - a.net);
+  const qualifiedStartRow = currentRow;
   
-  // 非該当会員を抽出（閾値未満の会員）
-  const unqualifiedMembers = allMembers.filter(m => m.participationDays < threshold);
-  // Net降順でソート
-  unqualifiedMembers.sort((a, b) => b.net - a.net);
-  
-  // グロス1位を特定（全会員から）
-  const grossFirst = [...allMembers].sort((a, b) => b.gross - a.gross)[0];
-  
-  // ========== 該当会員を出力（Net降順、順位あり） ==========
-  qualifiedMembers.forEach((member, index) => {
+  // 閾値以上の会員データを出力（順位付き）
+  sortedQualified.forEach((member, index) => {
     const name = getPlayerName(member.id);
-    // 備考欄: 前々期(P列)と前期(Q列)を結合
-    let remarks = '';
-    if (member.prevPrevPeriod) remarks += member.prevPrevPeriod;
-    if (member.prevPeriod) {
-      if (remarks) remarks += '\n';
-      remarks += member.prevPeriod;
-    }
-    
     const row = [
       index + 1,  // 順位
       member.id,
@@ -770,49 +669,40 @@ function outputWeightedSheet(qualifiedMembers, allMembers, guests, threshold, st
       member.net.toFixed(3),
       member.grossRank || '',  // グロス順位
       member.participationDays,
-      remarks
+      ''  // 備考は後でリッチテキストで設定
     ];
-    sheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
+    weightedSheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
     
-    // F列（Gross）: 1位は赤色・斜体
-    if (grossFirst && member.id === grossFirst.id) {
-      sheet.getRange(currentRow, 6).setFontColor('#FF0000').setFontStyle('italic');
+    // グロス1位の場合：F列を赤色+斜体
+    if (member.id == maxGrossId) {
+      weightedSheet.getRange(currentRow, 6)
+        .setFontColor('#FF0000')
+        .setFontStyle('italic');
     }
     
-    // I列（グロス順位）: 赤色・斜体
+    // グロス順位がある場合：I列を赤色+斜体
     if (member.grossRank) {
-      sheet.getRange(currentRow, 9).setFontColor('#FF0000').setFontStyle('italic');
+      weightedSheet.getRange(currentRow, 9)
+        .setFontColor('#FF0000')
+        .setFontStyle('italic');
     }
     
-    // 備考列の書式設定
-    if (member.prevPrevPeriod || member.prevPeriod) {
-      const remarkCell = sheet.getRange(currentRow, 11);
-      // 前々期は青、前期は赤で表示するためリッチテキスト使用
-      if (member.prevPrevPeriod && member.prevPeriod) {
-        // 両方ある場合はセルを分割できないので、前期の色（赤）を優先
-        remarkCell.setFontColor('#FF0000');
-      } else if (member.prevPrevPeriod) {
-        remarkCell.setFontColor('#0000FF');  // 青
-      } else if (member.prevPeriod) {
-        remarkCell.setFontColor('#FF0000');  // 赤
-      }
-    }
+    // 備考欄（K列）のリッチテキスト設定
+    setRemarksCell(weightedSheet, currentRow, 11, member.prevPrevPeriod, member.prevPeriod);
     
     currentRow++;
   });
   
-  // ========== 非該当会員を出力（Net降順、順位なし） ==========
-  unqualifiedMembers.forEach(member => {
+  // ===== 閾値未満の会員を抽出してNet順降順でソート =====
+  const qualifiedIds = new Set(qualifiedMembers.map(m => m.id));
+  const unqualifiedMembers = allMembers.filter(m => !qualifiedIds.has(m.id));
+  const sortedUnqualified = [...unqualifiedMembers].sort((a, b) => b.net - a.net);
+  
+  // 閾値未満の会員データを出力（順位なし）
+  sortedUnqualified.forEach((member) => {
     const name = getPlayerName(member.id);
-    let remarks = '';
-    if (member.prevPrevPeriod) remarks += member.prevPrevPeriod;
-    if (member.prevPeriod) {
-      if (remarks) remarks += '\n';
-      remarks += member.prevPeriod;
-    }
-    
     const row = [
-      '',  // 順位なし
+      '',  // 順位欄は空欄
       member.id,
       name,
       member.totalPoints,
@@ -822,76 +712,60 @@ function outputWeightedSheet(qualifiedMembers, allMembers, guests, threshold, st
       member.net.toFixed(3),
       member.grossRank || '',
       member.participationDays,
-      remarks
+      ''  // 備考は後でリッチテキストで設定
     ];
-    sheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
+    weightedSheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
     
-    // F列（Gross）: 1位は赤色・斜体
-    if (grossFirst && member.id === grossFirst.id) {
-      sheet.getRange(currentRow, 6).setFontColor('#FF0000').setFontStyle('italic');
+    // グロス1位の場合：F列を赤色+斜体
+    if (member.id == maxGrossId) {
+      weightedSheet.getRange(currentRow, 6)
+        .setFontColor('#FF0000')
+        .setFontStyle('italic');
     }
     
-    // I列（グロス順位）: 赤色・斜体
+    // グロス順位がある場合：I列を赤色+斜体
     if (member.grossRank) {
-      sheet.getRange(currentRow, 9).setFontColor('#FF0000').setFontStyle('italic');
+      weightedSheet.getRange(currentRow, 9)
+        .setFontColor('#FF0000')
+        .setFontStyle('italic');
     }
     
-    // 備考列の書式設定
-    if (member.prevPrevPeriod || member.prevPeriod) {
-      const remarkCell = sheet.getRange(currentRow, 11);
-      if (member.prevPrevPeriod && member.prevPeriod) {
-        remarkCell.setFontColor('#FF0000');
-      } else if (member.prevPrevPeriod) {
-        remarkCell.setFontColor('#0000FF');
-      } else if (member.prevPeriod) {
-        remarkCell.setFontColor('#FF0000');
-      }
-    }
+    // 備考欄（K列）のリッチテキスト設定
+    setRemarksCell(weightedSheet, currentRow, 11, member.prevPrevPeriod, member.prevPeriod);
     
     currentRow++;
   });
   
-  // 会員の最終行を記録
   const memberEndRow = currentRow - 1;
   
-  // ========== 規定日数の行 ==========
-  const noteRow = currentRow;
-  sheet.getRange(noteRow, 1).setValue('');
-  sheet.getRange(noteRow, 2).setValue('');
-  sheet.getRange(noteRow, 3).setValue('規定日数');
-  sheet.getRange(noteRow, 4).setValue('＝');
-  sheet.getRange(noteRow, 5).setValue('日数上位 20名');
-  sheet.getRange(noteRow, 6).setValue('');
-  sheet.getRange(noteRow, 7).setValue(`日数 ${threshold}日以上をランキング対象とする`);
+  // ===== 規定日数行（緑背景 #D9EAD3、緑文字 #38761D、緑点線枠）=====
+  const noteRowIndex = currentRow;
+  weightedSheet.getRange(currentRow, 3).setValue('規定日数');
+  weightedSheet.getRange(currentRow, 4).setValue('＝');
+  weightedSheet.getRange(currentRow, 5).setValue('日数上位 20名');
+  weightedSheet.getRange(currentRow, 7).setValue(`日数 ${threshold}日以上をランキング対象とする`);
   
-  // 規定日数行の書式（緑色背景、点線枠）
-  sheet.getRange(noteRow, 1, 1, 11)
+  // 規定日数行の書式
+  weightedSheet.getRange(currentRow, 1, 1, 11)
     .setBackground('#D9EAD3')
     .setFontColor('#38761D');
-  sheet.getRange(noteRow, 1, 1, 11).setBorder(
+  
+  // 緑点線枠
+  weightedSheet.getRange(currentRow, 1, 1, 11).setBorder(
     true, true, true, true, null, null,
     '#93C47D', SpreadsheetApp.BorderStyle.DASHED
   );
-  
   currentRow++;
   
-  // ========== ゲストセクション ==========
-  // ゲストをNet降順でソート
-  guests.sort((a, b) => b.net - a.net);
-  
+  // ===== ゲストセクション =====
+  const sortedGuests = [...guests].sort((a, b) => b.net - a.net);
   const guestStartRow = currentRow;
   
-  guests.forEach(guest => {
+  // ゲストデータを出力（A列に「ゲスト」赤文字）
+  sortedGuests.forEach((guest) => {
     const name = getPlayerName(guest.id);
-    let remarks = '';
-    if (guest.prevPrevPeriod) remarks += guest.prevPrevPeriod;
-    if (guest.prevPeriod) {
-      if (remarks) remarks += '\n';
-      remarks += guest.prevPeriod;
-    }
-    
     const row = [
-      'ゲスト',  // 順位の代わりに「ゲスト」
+      'ゲスト',  // 順位欄に「ゲスト」
       guest.id,
       name,
       guest.totalPoints,
@@ -899,78 +773,109 @@ function outputWeightedSheet(qualifiedMembers, allMembers, guests, threshold, st
       guest.gross.toFixed(3),
       guest.hdcp.toFixed(3),
       guest.net.toFixed(3),
-      '',  // グロス順位
+      '',
       guest.participationDays,
-      remarks
+      ''
     ];
-    sheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
+    weightedSheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
     
-    // ゲストの順位列を赤色
-    sheet.getRange(currentRow, 1).setFontColor('#FF0000');
+    // A列「ゲスト」を赤色に
+    weightedSheet.getRange(currentRow, 1).setFontColor('#FF0000');
     
-    // 備考列の書式設定
-    if (guest.prevPrevPeriod || guest.prevPeriod) {
-      const remarkCell = sheet.getRange(currentRow, 11);
-      if (guest.prevPrevPeriod && guest.prevPeriod) {
-        remarkCell.setFontColor('#FF0000');
-      } else if (guest.prevPrevPeriod) {
-        remarkCell.setFontColor('#0000FF');
-      } else if (guest.prevPeriod) {
-        remarkCell.setFontColor('#FF0000');
-      }
-    }
+    // 備考欄（K列）のリッチテキスト設定
+    setRemarksCell(weightedSheet, currentRow, 11, guest.prevPrevPeriod, guest.prevPeriod);
     
     currentRow++;
   });
   
   const guestEndRow = currentRow - 1;
   
-  // ========== 書式設定 ==========
-  // 列幅調整
+  // ===== 書式設定 =====
+  formatWeightedSheetV106(weightedSheet, qualifiedStartRow, memberEndRow, noteRowIndex, guestStartRow, guestEndRow, sortedQualified.length, sortedUnqualified.length, sortedGuests.length);
+}
+
+/**
+ * 備考欄にリッチテキストで前々期（青）・前期（赤）を表示
+ * @param {Sheet} sheet - シートオブジェクト
+ * @param {number} row - 行番号
+ * @param {number} col - 列番号
+ * @param {string} prevPrevPeriod - 前々期テキスト
+ * @param {string} prevPeriod - 前期テキスト
+ */
+function setRemarksCell(sheet, row, col, prevPrevPeriod, prevPeriod) {
+  const cell = sheet.getRange(row, col);
+  
+  if (prevPrevPeriod && prevPeriod) {
+    // 両方ある場合はリッチテキストで色分け
+    const text = prevPrevPeriod + '\n' + prevPeriod;
+    const richText = SpreadsheetApp.newRichTextValue()
+      .setText(text)
+      .setTextStyle(0, prevPrevPeriod.length, SpreadsheetApp.newTextStyle().setForegroundColor('#0000FF').build())
+      .setTextStyle(prevPrevPeriod.length + 1, text.length, SpreadsheetApp.newTextStyle().setForegroundColor('#FF0000').build())
+      .build();
+    cell.setRichTextValue(richText);
+  } else if (prevPrevPeriod) {
+    // 前々期のみの場合は青色
+    cell.setValue(prevPrevPeriod).setFontColor('#0000FF');
+  } else if (prevPeriod) {
+    // 前期のみの場合は赤色
+    cell.setValue(prevPeriod).setFontColor('#FF0000');
+  }
+}
+
+/**
+ * スコア集計（試合数加味）シートの書式を設定（v1.0.6版）
+ * @param {Sheet} sheet - 対象シート
+ * @param {number} qualifiedStartRow - 閾値以上会員開始行
+ * @param {number} memberEndRow - 会員終了行
+ * @param {number} noteRowIndex - 規定日数行
+ * @param {number} guestStartRow - ゲスト開始行
+ * @param {number} guestEndRow - ゲスト終了行
+ * @param {number} qualifiedCount - 閾値以上会員数
+ * @param {number} unqualifiedCount - 閾値未満会員数
+ * @param {number} guestCount - ゲスト数
+ */
+function formatWeightedSheetV106(sheet, qualifiedStartRow, memberEndRow, noteRowIndex, guestStartRow, guestEndRow, qualifiedCount, unqualifiedCount, guestCount) {
+  // 列幅を調整
   sheet.setColumnWidth(1, 50);   // 順位
-  sheet.setColumnWidth(2, 60);   // 会員ID
-  sheet.setColumnWidth(3, 100);  // 会員名
-  sheet.setColumnWidth(4, 50);   // 合計
-  sheet.setColumnWidth(5, 50);   // 試合数
-  sheet.setColumnWidth(6, 60);   // Gross
-  sheet.setColumnWidth(7, 60);   // HDCP
-  sheet.setColumnWidth(8, 60);   // Net
-  sheet.setColumnWidth(9, 70);   // グロス順位
-  sheet.setColumnWidth(10, 70);  // 参加日数
-  sheet.setColumnWidth(11, 80);  // 備考
+  sheet.setColumnWidth(2, 80);   // 会員ID
+  sheet.setColumnWidth(3, 120);  // 会員名
+  sheet.setColumnWidth(4, 70);   // 合計
+  sheet.setColumnWidth(5, 70);   // 試合数
+  sheet.setColumnWidth(6, 80);   // Gross
+  sheet.setColumnWidth(7, 80);   // HDCP
+  sheet.setColumnWidth(8, 80);   // Net
+  sheet.setColumnWidth(9, 80);   // クロス順位
+  sheet.setColumnWidth(10, 80);  // 参加日数
+  sheet.setColumnWidth(11, 150); // 備考
   
-  // 会員セクションの罫線（ヘッダー+会員データ）
-  if (memberEndRow >= 2) {
-    sheet.getRange(1, 1, memberEndRow, 11).setBorder(
+  // 会員データ（ヘッダー含む）の書式
+  const totalMemberRows = memberEndRow;
+  if (totalMemberRows > 0) {
+    // ヘッダー + 会員データに罫線
+    sheet.getRange(1, 1, totalMemberRows, 11).setBorder(
       true, true, true, true, true, true,
       'black', SpreadsheetApp.BorderStyle.SOLID
     );
+    
+    // 数値列の配置
+    if (memberEndRow >= qualifiedStartRow) {
+      sheet.getRange(qualifiedStartRow, 1, memberEndRow - qualifiedStartRow + 1, 1).setHorizontalAlignment('center');  // 順位
+      sheet.getRange(qualifiedStartRow, 2, memberEndRow - qualifiedStartRow + 1, 1).setHorizontalAlignment('center');  // ID
+      sheet.getRange(qualifiedStartRow, 4, memberEndRow - qualifiedStartRow + 1, 7).setHorizontalAlignment('right');   // 数値列
+    }
   }
   
-  // ゲストセクションの罫線
-  if (guests.length > 0) {
-    sheet.getRange(guestStartRow, 1, guests.length, 11).setBorder(
+  // ゲストデータの罫線（ゲストのみ、ヘッダーなし）
+  if (guestCount > 0 && guestEndRow >= guestStartRow) {
+    sheet.getRange(guestStartRow, 1, guestEndRow - guestStartRow + 1, 11).setBorder(
       true, true, true, true, true, true,
       'black', SpreadsheetApp.BorderStyle.SOLID
     );
-  }
-  
-  // 数値列の配置
-  const totalDataRows = memberEndRow - 1;  // ヘッダー除く
-  if (totalDataRows > 0) {
-    sheet.getRange(2, 1, totalDataRows, 1).setHorizontalAlignment('center');  // 順位
-    sheet.getRange(2, 2, totalDataRows, 1).setHorizontalAlignment('center');  // ID
-    sheet.getRange(2, 4, totalDataRows, 2).setHorizontalAlignment('right');   // 合計、試合数
-    sheet.getRange(2, 6, totalDataRows, 3).setHorizontalAlignment('right');   // Gross,HDCP,Net
-    sheet.getRange(2, 9, totalDataRows, 2).setHorizontalAlignment('center');  // グロス順位、参加日数
-  }
-  
-  if (guests.length > 0) {
-    sheet.getRange(guestStartRow, 1, guests.length, 1).setHorizontalAlignment('center');
-    sheet.getRange(guestStartRow, 2, guests.length, 1).setHorizontalAlignment('center');
-    sheet.getRange(guestStartRow, 4, guests.length, 2).setHorizontalAlignment('right');
-    sheet.getRange(guestStartRow, 6, guests.length, 3).setHorizontalAlignment('right');
-    sheet.getRange(guestStartRow, 9, guests.length, 2).setHorizontalAlignment('center');
+    
+    sheet.getRange(guestStartRow, 1, guestEndRow - guestStartRow + 1, 1).setHorizontalAlignment('center');
+    sheet.getRange(guestStartRow, 2, guestEndRow - guestStartRow + 1, 1).setHorizontalAlignment('center');
+    sheet.getRange(guestStartRow, 4, guestEndRow - guestStartRow + 1, 7).setHorizontalAlignment('right');
   }
 }
 
@@ -1005,8 +910,8 @@ function formatAggregationSheet(sheet, memberCount, guestCount) {
   sheet.setColumnWidth(11, 150); // 備考
   
   // 数値列を右揃えまたは中央揃え
-  const memberStartRow = 6;
-  const guestStartRow = memberStartRow + memberCount + 3;
+  const memberStartRow = 2;
+  const guestStartRow = memberStartRow + memberCount;
   
   if (memberCount > 0) {
     sheet.getRange(memberStartRow, 1, memberCount, 1).setHorizontalAlignment('center');  // 順位
@@ -1021,15 +926,9 @@ function formatAggregationSheet(sheet, memberCount, guestCount) {
   }
   
   // 罫線を設定
-  if (memberCount > 0) {
-    sheet.getRange(5, 1, memberCount + 1, 11).setBorder(
-      true, true, true, true, true, true,
-      'black', SpreadsheetApp.BorderStyle.SOLID
-    );
-  }
-  
-  if (guestCount > 0) {
-    sheet.getRange(guestStartRow - 1, 1, guestCount + 1, 11).setBorder(
+  const totalRows = 1 + memberCount + guestCount;
+  if (totalRows > 1) {
+    sheet.getRange(1, 1, totalRows, 11).setBorder(
       true, true, true, true, true, true,
       'black', SpreadsheetApp.BorderStyle.SOLID
     );

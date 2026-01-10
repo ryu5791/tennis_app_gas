@@ -1,5 +1,8 @@
 // ボタン関連の関数
 function onOpen() {
+  // バージョン情報をログに出力
+  logVersion();
+  
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('テニススコア')
     .addItem('クリア', 'clearData')
