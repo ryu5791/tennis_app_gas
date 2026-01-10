@@ -1,39 +1,21 @@
 /**
  * アプリケーションバージョン
- * スクリプトプロパティ 'APP_VERSION' から取得
- * 未設定の場合はデフォルト値を使用
  */
-const DEFAULT_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 
 /**
  * バージョン情報を取得する
  * @return {string} - バージョン文字列
  */
 function getVersion() {
-  try {
-    const props = PropertiesService.getScriptProperties();
-    const version = props.getProperty('APP_VERSION');
-    return version || DEFAULT_VERSION;
-  } catch (e) {
-    return DEFAULT_VERSION;
-  }
-}
-
-/**
- * バージョン情報を設定する
- * @param {string} version - 設定するバージョン
- */
-function setVersion(version) {
-  const props = PropertiesService.getScriptProperties();
-  props.setProperty('APP_VERSION', version);
-  Logger.log(`バージョンを ${version} に設定しました`);
+  return APP_VERSION;
 }
 
 /**
  * バージョン情報をログに出力する
  */
 function logVersion() {
-  Logger.log(`テニススコア管理システム v${getVersion()}`);
+  Logger.log(`テニススコア管理システム v${APP_VERSION}`);
 }
 
 /**
