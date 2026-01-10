@@ -58,108 +58,17 @@ function aggregateScores() {
     // キャッシュをクリア
     clearMasterDataCache();
     
-    // HTMLダイアログを表示（非同期処理）
-    showDateInputDialog();
-    // 処理はprocessDateInput関数で継続
+    // 日付入力ダイアログを表示
+    const dateRange = showDateInputDialog();
     
-  } catch (error) {
-    Logger.log(`Error in aggregateScores: ${error.message}`);
-    UIHelper.showAlert(`エラーが発生しました: ${error.message}`);
-  }
-}
-
-/**
- * 日付入力HTMLダイアログを表示
- */
-function showDateInputDialog() {
-  const html = HtmlService.createHtmlOutput(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <base target="_top">
-      <style>
-        body { font-family: Arial, sans-serif; padding: 15px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"] { 
-          width: 200px; padding: 8px; font-size: 14px; 
-          border: 1px solid #ccc; border-radius: 4px;
-        }
-        .buttons { margin-top: 20px; text-align: right; }
-        button { padding: 8px 20px; margin-left: 10px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; }
-        .ok-btn { background-color: #4285f4; color: white; }
-        .ok-btn:hover { background-color: #3367d6; }
-        .cancel-btn { background-color: #f1f1f1; color: #333; }
-        .cancel-btn:hover { background-color: #e0e0e0; }
-      </style>
-    </head>
-    <body>
-      <div class="form-group">
-        <label>開始日:</label>
-        <input type="text" id="startDate" placeholder="例: 2025/01/01" autofocus>
-      </div>
-      <div class="form-group">
-        <label>終了日:</label>
-        <input type="text" id="endDate" placeholder="例: 2025/12/31">
-      </div>
-      <div class="buttons">
-        <button class="cancel-btn" onclick="google.script.host.close()">キャンセル</button>
-        <button class="ok-btn" onclick="submitDates()">OK</button>
-      </div>
-      <script>
-        document.getElementById('startDate').addEventListener('keydown', function(e) {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('endDate').focus();
-          }
-        });
-        document.getElementById('endDate').addEventListener('keydown', function(e) {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            submitDates();
-          }
-        });
-        
-        function submitDates() {
-          const startDate = document.getElementById('startDate').value.trim();
-          const endDate = document.getElementById('endDate').value.trim();
-          if (!startDate || !endDate) { 
-            alert('両方の日付を入力してください'); 
-            return; 
-          }
-          google.script.run
-            .withSuccessHandler(function() { google.script.host.close(); })
-            .withFailureHandler(function(e) { alert('エラー: ' + e.message); })
-            .processDateInput(startDate, endDate);
-        }
-      </script>
-    </body>
-    </html>
-  `).setWidth(300).setHeight(200);
-  
-  SpreadsheetApp.getUi().showModalDialog(html, '集計期間の設定');
-}
-
-/**
- * HTMLダイアログからの日付入力を処理
- * @param {string} startDateStr - 開始日文字列
- * @param {string} endDateStr - 終了日文字列
- */
-function processDateInput(startDateStr, endDateStr) {
-  try {
-    const startDate = new Date(startDateStr);
-    const endDate = new Date(endDateStr);
-    
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      UIHelper.showAlert("日付の形式が正しくありません。");
+    if (!dateRange) {
+      UIHelper.showAlert("集計をキャンセルしました。");
       return;
     }
     
-    if (startDate > endDate) {
-      UIHelper.showAlert("開始日は終了日より前の日付を指定してください。");
-      return;
-    }
+    const { startDate, endDate } = dateRange;
     
+    // 集計処理を実行
     const result = executeAggregation(startDate, endDate);
     
     if (result.success) {
@@ -172,8 +81,74 @@ function processDateInput(startDateStr, endDateStr) {
     } else {
       UIHelper.showAlert(`集計中にエラーが発生しました: ${result.error}`);
     }
+    
   } catch (error) {
-    UIHelper.showAlert("日付の処理中にエラーが発生しました: " + error.message);
+    Logger.log(`Error in aggregateScores: ${error.message}`);
+    UIHelper.showAlert(`エラーが発生しました: ${error.message}`);
+  }
+}
+
+/**
+ * 日付入力ダイアログを表示
+ * @return {Object|null} {startDate: Date, endDate: Date} または null
+ */
+function showDateInputDialog() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // 開始日の入力
+  const startDateResponse = ui.prompt(
+    '集計期間の設定',
+    '開始日を入力してください（例: 2025/01/01）:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (startDateResponse.getSelectedButton() !== ui.Button.OK) {
+    return null;
+  }
+  
+  const startDateStr = startDateResponse.getResponseText().trim();
+  if (!startDateStr) {
+    UIHelper.showAlert("開始日が入力されていません。");
+    return null;
+  }
+  
+  // 終了日の入力
+  const endDateResponse = ui.prompt(
+    '集計期間の設定',
+    '終了日を入力してください（例: 2025/12/31）:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (endDateResponse.getSelectedButton() !== ui.Button.OK) {
+    return null;
+  }
+  
+  const endDateStr = endDateResponse.getResponseText().trim();
+  if (!endDateStr) {
+    UIHelper.showAlert("終了日が入力されていません。");
+    return null;
+  }
+  
+  // 日付の妥当性チェック
+  try {
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      UIHelper.showAlert("日付の形式が正しくありません。");
+      return null;
+    }
+    
+    if (startDate > endDate) {
+      UIHelper.showAlert("開始日は終了日より前の日付を指定してください。");
+      return null;
+    }
+    
+    return { startDate, endDate };
+    
+  } catch (error) {
+    UIHelper.showAlert("日付の変換に失敗しました: " + error.message);
+    return null;
   }
 }
 
