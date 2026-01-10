@@ -204,9 +204,7 @@ function executeAggregation(startDate, endDate) {
     // 9. スコア集計（試合数加味）シートを作成
     outputWeightedSheet(qualifiedMembers, members, guests, threshold, startDate, endDate);
     
-    // 10. 月別参加日数シートを出力
-    const monthlyData = calculateMonthlyParticipation(scoreData, startDate, endDate);
-    outputMonthlyParticipationSheet(monthlyData, hdcpData, startDate, endDate);
+    // 参加日数シートはインプット用なので書き込みは行わない
     
     return {
       success: true,
@@ -220,151 +218,6 @@ function executeAggregation(startDate, endDate) {
       success: false,
       error: error.message
     };
-  }
-}
-
-/**
- * 月別参加日数を計算
- * @param {Array} scoreData - スコアデータ
- * @param {Date} startDate - 開始日
- * @param {Date} endDate - 終了日
- * @return {Object} ID別の月別参加日数 {id: {1: 3, 2: 5, ...}}
- */
-function calculateMonthlyParticipation(scoreData, startDate, endDate) {
-  const monthlyData = {};
-  
-  scoreData.forEach(record => {
-    const id = record.id;
-    const date = new Date(record.date);
-    const month = date.getMonth() + 1; // 1-12
-    
-    if (!monthlyData[id]) {
-      monthlyData[id] = {};
-      for (let m = 1; m <= 12; m++) {
-        monthlyData[id][m] = new Set(); // 重複を排除するためSet使用
-      }
-    }
-    
-    // その月の日付を記録
-    const dateStr = formatDate(date);
-    monthlyData[id][month].add(dateStr);
-  });
-  
-  // Setをカウント数に変換
-  const result = {};
-  Object.keys(monthlyData).forEach(id => {
-    result[id] = {};
-    for (let m = 1; m <= 12; m++) {
-      result[id][m] = monthlyData[id][m].size;
-    }
-    // 年間合計を計算
-    result[id].total = Object.values(result[id]).reduce((sum, count) => sum + count, 0);
-  });
-  
-  return result;
-}
-
-/**
- * 月別参加日数シートを出力
- * @param {Object} monthlyData - 月別参加日数データ
- * @param {Object} hdcpData - HDCP情報
- * @param {Date} startDate - 開始日
- * @param {Date} endDate - 終了日
- */
-function outputMonthlyParticipationSheet(monthlyData, hdcpData, startDate, endDate) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const year = startDate.getFullYear();
-  
-  // シートを作成または取得
-  let sheet = ss.getSheetByName('参加日数');
-  if (!sheet) {
-    sheet = ss.insertSheet('参加日数');
-  } else {
-    sheet.clear();
-  }
-  
-  // タイトル行
-  sheet.getRange(1, 2).setValue(`${year}年`);
-  sheet.getRange(1, 7).setValue('年間レッツ会計報告 及び コート使用状況');
-  
-  // ヘッダー行
-  const headers = ['ID', '会員名', '備考欄', '年会費'];
-  const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-  sheet.getRange(4, 1, 1, 4).setValues([headers]);
-  sheet.getRange(5, 4).setValue('年会員');
-  sheet.getRange(5, 5, 1, months.length).setValues([months]);  // E列(5列目)から月名を配置
-  
-  let currentRow = 6;
-  
-  // 会員のみを抽出してソート（hdcpDataは既に辞書型なのでO(1)で検索可能）
-  const members = Object.keys(monthlyData)
-    .filter(id => hdcpData[id] && hdcpData[id].isMember)
-    .sort((a, b) => Number(a) - Number(b));
-  
-  // データ行を出力
-  members.forEach(id => {
-    const name = getPlayerName(id);
-    const row = [id, name, '', 3]; // 年会費は3（固定値、必要に応じて変更）
-    
-    // 各月の参加日数を追加
-    for (let m = 1; m <= 12; m++) {
-      const count = monthlyData[id][m] || 0;
-      row.push(count > 0 ? count : '－');
-    }
-    
-    sheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
-    currentRow++;
-  });
-  
-  // 書式設定
-  formatMonthlyParticipationSheet(sheet, members.length);
-}
-
-/**
- * 月別参加日数シートの書式を設定
- * @param {Sheet} sheet - 対象シート
- * @param {number} memberCount - 会員数
- */
-function formatMonthlyParticipationSheet(sheet, memberCount) {
-  // 列幅調整
-  sheet.setColumnWidth(1, 60);   // ID
-  sheet.setColumnWidth(2, 120);  // 会員名
-  sheet.setColumnWidth(3, 100);  // 備考欄
-  sheet.setColumnWidth(4, 70);   // 年会費
-  
-  // 月の列幅
-  for (let col = 5; col <= 16; col++) {
-    sheet.setColumnWidth(col, 50);
-  }
-  
-  // タイトル行の書式
-  sheet.getRange(1, 2).setFontSize(14).setFontWeight('bold');
-  sheet.getRange(1, 7).setFontSize(12).setFontWeight('bold');
-  
-  // ヘッダー行の書式（4-5行目）
-  sheet.getRange(4, 1, 2, 16)
-    .setBackground('#D9EAD3')
-    .setFontWeight('bold')
-    .setHorizontalAlignment('center');
-  
-  // データ行の書式
-  if (memberCount > 0) {
-    // ID列を中央揃え
-    sheet.getRange(6, 1, memberCount, 1).setHorizontalAlignment('center');
-    
-    // 年会費と月の列を中央揃え
-    sheet.getRange(6, 4, memberCount, 13).setHorizontalAlignment('center');
-    
-    // 月の列（参加日数）に色付け（交互に）
-    for (let col = 5; col <= 16; col += 2) {
-      sheet.getRange(6, col, memberCount, 1).setBackground('#E8F4E8');
-    }
-    
-    // 罫線
-    sheet.getRange(4, 1, memberCount + 2, 16).setBorder(
-      true, true, true, true, true, true,
-      'black', SpreadsheetApp.BorderStyle.SOLID
-    );
   }
 }
 
@@ -490,7 +343,7 @@ function getParticipationDays(scoreData, startDate, endDate) {
  */
 function getParticipationDaysFromSheet(sheet, startDate, endDate) {
   // シート構造: 4行目がヘッダー、6行目からデータ
-  // A列: ID, B列: 会員名, C列: 参加日数
+  // A列: ID, Q列(17列目): 参加日数合計
   const lastRow = sheet.getLastRow();
   const dataStartRow = 6;  // データ開始行
   
@@ -498,10 +351,10 @@ function getParticipationDaysFromSheet(sheet, startDate, endDate) {
     return {};
   }
   
-  // A列(ID)とC列(参加日数)を取得
+  // A列(ID)とQ列(参加日数合計)を取得
   const numRows = lastRow - dataStartRow + 1;
-  const idData = sheet.getRange(dataStartRow, 1, numRows, 1).getValues();   // A列
-  const daysData = sheet.getRange(dataStartRow, 3, numRows, 1).getValues(); // C列
+  const idData = sheet.getRange(dataStartRow, 1, numRows, 1).getValues();    // A列
+  const daysData = sheet.getRange(dataStartRow, 17, numRows, 1).getValues(); // Q列(17列目)
   const result = {};
   
   // 配列を一度だけループして辞書を構築
@@ -513,7 +366,7 @@ function getParticipationDaysFromSheet(sheet, startDate, endDate) {
     }
   }
   
-  Logger.log(`参加日数シートから ${Object.keys(result).length} 件のデータを取得しました`);
+  Logger.log(`参加日数シートから ${Object.keys(result).length} 件のデータを取得しました（Q列参照）`);
   
   return result;
 }
