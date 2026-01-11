@@ -208,9 +208,10 @@ function executeAggregation(startDate, endDate) {
     
     // 参加日数シートはインプット用なので書き込みは行わない
     
+    // 会員数はスコア集計シートのゲスト以外の人数（全会員数）を返す
     return {
       success: true,
-      memberCount: qualifiedMembers.length,
+      memberCount: members.length,
       guestCount: guests.length
     };
     
@@ -771,30 +772,35 @@ function outputWeightedSheet(qualifiedMembers, allMembers, guests, threshold, st
 
 /**
  * 備考欄にリッチテキストで前々期（青）・前期（赤）を表示
+ * 形式: 「前々期○位」「前期○位」
  * @param {Sheet} sheet - シートオブジェクト
  * @param {number} row - 行番号
  * @param {number} col - 列番号
- * @param {string} prevPrevPeriod - 前々期テキスト
- * @param {string} prevPeriod - 前期テキスト
+ * @param {string} prevPrevPeriod - 前々期順位（数値のみ）
+ * @param {string} prevPeriod - 前期順位（数値のみ）
  */
 function setRemarksCell(sheet, row, col, prevPrevPeriod, prevPeriod) {
   const cell = sheet.getRange(row, col);
   
-  if (prevPrevPeriod && prevPeriod) {
+  // 順位テキストを生成
+  const prevPrevText = prevPrevPeriod ? `前々期${prevPrevPeriod}位` : '';
+  const prevText = prevPeriod ? `前期${prevPeriod}位` : '';
+  
+  if (prevPrevText && prevText) {
     // 両方ある場合はリッチテキストで色分け
-    const text = prevPrevPeriod + '\n' + prevPeriod;
+    const text = prevPrevText + '\n' + prevText;
     const richText = SpreadsheetApp.newRichTextValue()
       .setText(text)
-      .setTextStyle(0, prevPrevPeriod.length, SpreadsheetApp.newTextStyle().setForegroundColor('#0000FF').build())
-      .setTextStyle(prevPrevPeriod.length + 1, text.length, SpreadsheetApp.newTextStyle().setForegroundColor('#FF0000').build())
+      .setTextStyle(0, prevPrevText.length, SpreadsheetApp.newTextStyle().setForegroundColor('#0000FF').build())
+      .setTextStyle(prevPrevText.length + 1, text.length, SpreadsheetApp.newTextStyle().setForegroundColor('#FF0000').build())
       .build();
     cell.setRichTextValue(richText);
-  } else if (prevPrevPeriod) {
+  } else if (prevPrevText) {
     // 前々期のみの場合は青色
-    cell.setValue(prevPrevPeriod).setFontColor('#0000FF');
-  } else if (prevPeriod) {
+    cell.setValue(prevPrevText).setFontColor('#0000FF');
+  } else if (prevText) {
     // 前期のみの場合は赤色
-    cell.setValue(prevPeriod).setFontColor('#FF0000');
+    cell.setValue(prevText).setFontColor('#FF0000');
   }
 }
 
