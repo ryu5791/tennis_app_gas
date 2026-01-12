@@ -68,8 +68,16 @@ function aggregateScores() {
     
     const { startDate, endDate } = dateRange;
     
-    // 集計処理を実行
-    const result = executeAggregation(startDate, endDate);
+    // 参加日数閾値を入力するダイアログを表示
+    const threshold = showThresholdInputDialog(startDate, endDate);
+    
+    if (threshold === null) {
+      UIHelper.showAlert("集計をキャンセルしました。");
+      return;
+    }
+    
+    // 集計処理を実行（閾値を渡す）
+    const result = executeAggregation(startDate, endDate, threshold);
     
     if (result.success) {
       UIHelper.showAlert(
@@ -153,12 +161,74 @@ function showDateInputDialog() {
 }
 
 /**
+ * 参加日数閾値入力ダイアログを表示
+ * @param {Date} startDate - 開始日
+ * @param {Date} endDate - 終了日
+ * @return {number|null} 閾値（キャンセル時はnull）
+ */
+function showThresholdInputDialog(startDate, endDate) {
+  const ui = SpreadsheetApp.getUi();
+  
+  // 初期値を計算（期間の月数 × 2）
+  const defaultThreshold = calculateDefaultThreshold(startDate, endDate);
+  
+  // 閾値入力ダイアログ
+  const response = ui.prompt(
+    '参加日数のボーダーライン設定',
+    `参加日数のボーダーラインを入力してください（初期値: ${defaultThreshold}）:`,
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return null;
+  }
+  
+  const inputText = response.getResponseText().trim();
+  
+  // 空の場合は初期値を使用
+  if (!inputText) {
+    return defaultThreshold;
+  }
+  
+  // 数値に変換
+  const threshold = parseInt(inputText, 10);
+  
+  if (isNaN(threshold) || threshold < 0) {
+    UIHelper.showAlert("有効な数値を入力してください。");
+    return null;
+  }
+  
+  return threshold;
+}
+
+/**
+ * デフォルトの参加日数閾値を計算（期間の月数 × 2）
+ * @param {Date} startDate - 開始日
+ * @param {Date} endDate - 終了日
+ * @return {number} デフォルト閾値
+ */
+function calculateDefaultThreshold(startDate, endDate) {
+  // 開始月と終了月を取得
+  const startYear = startDate.getFullYear();
+  const startMonth = startDate.getMonth();
+  const endYear = endDate.getFullYear();
+  const endMonth = endDate.getMonth();
+  
+  // 月数を計算（両端を含む）
+  const monthCount = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
+  
+  // 月数 × 2 を返す
+  return monthCount * 2;
+}
+
+/**
  * 集計処理を実行
  * @param {Date} startDate - 開始日
  * @param {Date} endDate - 終了日
+ * @param {number} threshold - 参加日数閾値（ダイアログで入力された値）
  * @return {Object} 処理結果
  */
-function executeAggregation(startDate, endDate) {
+function executeAggregation(startDate, endDate, threshold) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
@@ -183,18 +253,16 @@ function executeAggregation(startDate, endDate) {
     // 5.5. グロス順位を計算（上位10名）
     calculateGrossRank(members);
     
-    // 6. 会員の参加日数閾値を計算（20番目）
-    const threshold = calculateThreshold(members);
+    // 6. 閾値はダイアログで入力された値を使用
     Logger.log(`参加日数閾値: ${threshold}日`);
     
-    // 7. 閾値以上の会員、または備考（前期/前々期の順位）がある会員を抽出
+    // 7. 閾値以上の会員、または前期/前々期の順位がある会員を抽出
     const qualifiedMembers = members
       .filter(m => {
         // 参加日数が閾値以上
         if (m.participationDays >= threshold) return true;
-        // 備考に「前期」または「前々期」が含まれている場合も対象
-        if ((m.prevPrevPeriod && m.prevPrevPeriod.includes('前々期')) || 
-            (m.prevPeriod && m.prevPeriod.includes('前期'))) return true;
+        // 前期または前々期の順位がある場合も対象
+        if (m.prevPrevPeriod || m.prevPeriod) return true;
         return false;
       })
       .sort((a, b) => b.net - a.net);
@@ -530,13 +598,23 @@ function outputToSheet(members, guests, threshold, startDate, endDate) {
   const memberHeaders = ['順位', '会員ＩＤ', '会員名', '合計', '試合数', 'Gross', 'HDCP', 'Net', 'ｸﾞﾛｽ順位', '参加日数', '備考'];
   outputSheet.getRange(currentRow, 1, 1, memberHeaders.length).setValues([memberHeaders]);
   outputSheet.getRange(currentRow, 1, 1, memberHeaders.length)
-    .setBackground('#4A86E8')
+    .setBackground('#6AA84F')  // 緑色に変更
     .setFontColor('white')
     .setFontWeight('bold');
   currentRow++;
   
-  // 会員データを会員ID昇順でソート（非破壊）
-  const sortedMembers = [...members].sort((a, b) => Number(a.id) - Number(b.id));
+  // 会員データをNet降順でソート（非破壊）
+  const sortedMembers = [...members].sort((a, b) => b.net - a.net);
+  
+  // 全会員の中でグロス最大のIDを特定
+  let maxGross = -Infinity;
+  let maxGrossId = null;
+  sortedMembers.forEach(member => {
+    if (member.gross > maxGross) {
+      maxGross = member.gross;
+      maxGrossId = member.id;
+    }
+  });
   
   // 会員データを出力
   sortedMembers.forEach((member, index) => {
@@ -555,11 +633,26 @@ function outputToSheet(members, guests, threshold, startDate, endDate) {
       member.remarks || ''   // 備考
     ];
     outputSheet.getRange(currentRow, 1, 1, row.length).setValues([row]);
+    
+    // グロス1位の場合：F列を赤色+斜体
+    if (member.id == maxGrossId) {
+      outputSheet.getRange(currentRow, 6)
+        .setFontColor('#FF0000')
+        .setFontStyle('italic');
+    }
+    
+    // グロス順位がある場合：I列を赤色+斜体
+    if (member.grossRank) {
+      outputSheet.getRange(currentRow, 9)
+        .setFontColor('#FF0000')
+        .setFontStyle('italic');
+    }
+    
     currentRow++;
   });
   
-  // ゲストデータを会員ID昇順でソート（非破壊）
-  const sortedGuests = [...guests].sort((a, b) => Number(a.id) - Number(b.id));
+  // ゲストデータをNet降順でソート（非破壊）
+  const sortedGuests = [...guests].sort((a, b) => b.net - a.net);
   
   // ゲストデータを出力（順位欄に「ゲスト」を表示）
   sortedGuests.forEach((guest) => {
@@ -893,6 +986,13 @@ function formatAggregationSheet(sheet, memberCount, guestCount) {
   // 数値列を右揃えまたは中央揃え
   const memberStartRow = 2;
   const guestStartRow = memberStartRow + memberCount;
+  const totalDataRows = memberCount + guestCount;
+  
+  // C列（会員名）にHG丸ゴシックM-PROまたは代替フォントを設定
+  // Google Sheetsで利用可能なフォントに近いものを使用
+  if (totalDataRows > 0) {
+    sheet.getRange(memberStartRow, 3, totalDataRows, 1).setFontFamily('M PLUS Rounded 1c');
+  }
   
   if (memberCount > 0) {
     sheet.getRange(memberStartRow, 1, memberCount, 1).setHorizontalAlignment('center');  // 順位
