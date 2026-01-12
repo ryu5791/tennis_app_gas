@@ -256,17 +256,11 @@ function executeAggregation(startDate, endDate, threshold) {
     // 6. 閾値はダイアログで入力された値を使用
     Logger.log(`参加日数閾値: ${threshold}日`);
     
-    // 7. 閾値以上の会員、または前期/前々期の順位がある会員を抽出
+    // 7. 閾値以上の会員のみを抽出（前期/前々期順位があっても日数不足なら対象外）
     const qualifiedMembers = members
-      .filter(m => {
-        // 参加日数が閾値以上
-        if (m.participationDays >= threshold) return true;
-        // 前期または前々期の順位がある場合も対象
-        if (m.prevPrevPeriod || m.prevPeriod) return true;
-        return false;
-      })
+      .filter(m => m.participationDays >= threshold)
       .sort((a, b) => b.net - a.net);
-    Logger.log(`閾値以上または備考ありの会員: ${qualifiedMembers.length}名`);
+    Logger.log(`閾値以上の会員: ${qualifiedMembers.length}名`);
     
     // 8. スコア集計シートに出力（全会員を出力）
     outputToSheet(members, guests, threshold, startDate, endDate);
@@ -811,8 +805,7 @@ function outputWeightedSheet(qualifiedMembers, allMembers, guests, threshold, st
   const noteRowIndex = currentRow;
   weightedSheet.getRange(currentRow, 3).setValue('規定日数');
   weightedSheet.getRange(currentRow, 4).setValue('＝');
-  weightedSheet.getRange(currentRow, 5).setValue('日数上位 20名');
-  weightedSheet.getRange(currentRow, 7).setValue(`日数 ${threshold}日以上をランキング対象とする`);
+  weightedSheet.getRange(currentRow, 5).setValue(`日数 ${threshold}日以上をランキング対象とする`);
   
   // 規定日数行の書式
   weightedSheet.getRange(currentRow, 1, 1, 11)
