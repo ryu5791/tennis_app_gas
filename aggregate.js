@@ -175,7 +175,7 @@ function showThresholdInputDialog(startDate, endDate) {
   // 閾値入力ダイアログ
   const response = ui.prompt(
     '参加日数のボーダーライン設定',
-    `参加日数のボーダーラインを入力してください（初期値: ${defaultThreshold}）:`,
+    `参加日数のボーダーラインを入力してください\n(未入力なら${defaultThreshold}日になります)`,
     ui.ButtonSet.OK_CANCEL
   );
   
