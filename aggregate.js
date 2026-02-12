@@ -597,8 +597,8 @@ function outputToSheet(members, guests, threshold, startDate, endDate) {
     .setFontWeight('bold');
   currentRow++;
   
-  // 会員データをNet降順でソート（非破壊）
-  const sortedMembers = [...members].sort((a, b) => b.net - a.net);
+  // 会員データをID昇順でソート（非破壊）
+  const sortedMembers = [...members].sort((a, b) => Number(a.id) - Number(b.id));
   
   // 全会員の中でグロス最大のIDを特定
   let maxGross = -Infinity;
@@ -645,8 +645,8 @@ function outputToSheet(members, guests, threshold, startDate, endDate) {
     currentRow++;
   });
   
-  // ゲストデータをNet降順でソート（非破壊）
-  const sortedGuests = [...guests].sort((a, b) => b.net - a.net);
+  // ゲストデータをID昇順でソート（非破壊）
+  const sortedGuests = [...guests].sort((a, b) => Number(a.id) - Number(b.id));
   
   // ゲストデータを出力（順位欄に「ゲスト」を表示）
   sortedGuests.forEach((guest) => {
