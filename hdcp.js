@@ -2,16 +2,21 @@
  * HDCP計算処理
  * v3.01 - 新機能追加（テスト表示）
  * v3.03 - HDCP計算ロジック実装
+ * v3.04 - 3行目ヘッダー更新、O列差分、R列備考+背景色対応
  * 
  * HDCPシートの列構成:
  *   A列(1)=ID, B列(2)=名前
  *   C列(3)=前々期合計, D列(4)=前々期試合数, E列(5)=前々期Gross
  *   F列(6)=前期合計,   G列(7)=前期試合数,   H列(8)=前期Gross
  *   I列(9)=2期合計,    J列(10)=2期試合数,    K列(11)=2期Gross
- *   L列(12)=前の期名,  M列(13)=今の期名(=新ﾊﾝﾃﾞｲ算出元)
- *   N列(14)=新ハンディ, O列(15)=備考
+ *   L列(12)=前の期ハンディ, M列(13)=今の期ハンディ(=5-K)
+ *   N列(14)=新ハンディ(修正後), O列(15)=新旧差(M-L)
  *   P列(16)=前々期順位, Q列(17)=前期順位
+ *   R列(18)=備考（修正コメント+背景色）
  *   T列(20)=会員フラグ
+ *
+ * 3行目ヘッダー行の期名:
+ *   D3=前々期名, G3=前期名, L3=前期名, M3=今期名, N3=今期名, O3=今期名
  *
  * スコア集計シートの列構成:
  *   A=順位, B=会員ID, C=会員名, D=合計, E=試合数, F=Gross, G=HDCP, H=Net
@@ -124,7 +129,15 @@ function calculateHDCP() {
     // --- 3e: M列3行目 = L列の次の期 ---
     const lVal = String(hdcpSheet.getRange(3, 12).getValue());
     const nextPeriod = getNextPeriod(lVal);
-    hdcpSheet.getRange(3, 13).setValue(nextPeriod);
+    hdcpSheet.getRange(3, 13).setValue(nextPeriod); // M3
+    
+    // --- 3e2: G3, N3, O3 の期名ヘッダー更新 ---
+    // G3 = D3の次の期
+    const d3Val = String(hdcpSheet.getRange(3, 4).getValue());
+    hdcpSheet.getRange(3, 7).setValue(getNextPeriod(d3Val)); // G3
+    // N3, O3 = 次の期（M3と同じ値）
+    hdcpSheet.getRange(3, 14).setValue(nextPeriod); // N3
+    hdcpSheet.getRange(3, 15).setValue(nextPeriod); // O3
     
     // --- 3f: M列5行目以降 = (5 - K列) ---
     if (calcRows > 0) {
@@ -156,50 +169,71 @@ function calculateHDCP() {
       hdcpSheet.getRange(5, 17, calcRows, 1).setValues(newQ);
     }
     
-    // --- 3i & 3j: 備考(O列)とN列（新ハンディ）の設定（5行目以降） ---
+    // --- 3i & 3j: N列（新ハンディ）、O列（差分）、R列（備考+背景色）の設定（5行目以降） ---
     // 重み: 1位→0.8, 2位→0.85, 3位→0.9
     const weightMap = {1: 0.8, 2: 0.85, 3: 0.9};
     
     if (calcRows > 0) {
       // 必要なデータを一括取得（5行目以降）
       const mValues = hdcpSheet.getRange(5, 13, calcRows, 1).getValues();  // M列(新ﾊﾝﾃﾞｲ算出元)
+      const lValues = hdcpSheet.getRange(5, 12, calcRows, 1).getValues();  // L列(前期ハンディ)
       const pValues = hdcpSheet.getRange(5, 16, calcRows, 1).getValues();  // P列
       const qValues = hdcpSheet.getRange(5, 17, calcRows, 1).getValues();  // Q列
       
-      const newO = []; // 備考
-      const newN = []; // 新ハンディ
+      const newN = []; // N列: 新ハンディ
+      const newO = []; // O列: M-L差分
+      const newR = []; // R列: 備考テキスト
+      const rBgColors = []; // R列: 背景色
       
       for (let i = 0; i < calcRows; i++) {
         const id = String(hdcpIds[i + 2] ? hdcpIds[i + 2][0] : ''); // 5行目=hdcpIds[2]
         const newHandy = Number(mValues[i][0]) || 0; // M列
+        const lHandy = Number(lValues[i][0]) || 0;   // L列
         const pRank = Number(pValues[i][0]);
         const qRank = Number(qValues[i][0]);
         
         let remarks = '';
         let nVal = newHandy; // デフォルトはM列の値
+        let bgColor = null;  // 背景色（null=変更なし）
         
         // P列に1～3の数字がある場合
         if (pRank >= 1 && pRank <= 3) {
           const weight = weightMap[pRank];
           nVal = newHandy * weight;
-          remarks = `修正→${newHandy.toFixed(3)}×${weight}`;
+          remarks = `修正→{新ﾊﾝﾃﾞｲ}×${weight}`;
+          bgColor = '#CCFFCC'; // 薄緑
         }
         
-        // Q列に1～3の数字がある場合
+        // Q列に1～3の数字がある場合（P列より優先）
         if (qRank >= 1 && qRank <= 3) {
           const weight = weightMap[qRank];
           const net = (id && scoreData[id]) ? (scoreData[id].net || 0) : 0;
           nVal = (newHandy - (net - 5.0)) * weight;
-          if (remarks) remarks += '\n';
-          remarks += `修正→{${newHandy.toFixed(3)}-(${net.toFixed(3)}-5.000)}×${weight}`;
+          remarks = `修正→{新ﾊﾝﾃﾞｨー（ﾈｯﾄ-5.000）}×${weight}`;
+          bgColor = '#FFFF99'; // 薄黄
         }
         
-        newO.push([remarks]);
+        // O列: M列 - L列
+        const oVal = newHandy - lHandy;
+        
         newN.push([nVal]);
+        newO.push([oVal]);
+        newR.push([remarks]);
+        rBgColors.push([bgColor || null]);
       }
       
-      hdcpSheet.getRange(5, 15, calcRows, 1).setValues(newO); // O列(備考)
       hdcpSheet.getRange(5, 14, calcRows, 1).setValues(newN); // N列(新ハンディ)
+      hdcpSheet.getRange(5, 15, calcRows, 1).setValues(newO); // O列(M-L差分)
+      hdcpSheet.getRange(5, 18, calcRows, 1).setValues(newR); // R列(備考)
+      
+      // R列の背景色を設定（備考がある行のみ）
+      for (let i = 0; i < calcRows; i++) {
+        if (rBgColors[i][0]) {
+          hdcpSheet.getRange(5 + i, 18).setBackground(rBgColors[i][0]);
+        } else {
+          hdcpSheet.getRange(5 + i, 18).setBackground(null); // 背景色クリア
+        }
+      }
     }
     
     // 完了メッセージ
@@ -293,24 +327,35 @@ function getWeightedTop3(weightedSheet) {
 /**
  * 期の文字列から次の期を計算する
  * "2025年後期" → "2026年前期", "2025年前期" → "2025年後期"
+ * "25後期" → "26前期", "25前期" → "25後期" (短縮形式にも対応)
  * @param {string} periodStr - 期の文字列
  * @return {string} 次の期の文字列
  */
 function getNextPeriod(periodStr) {
   if (!periodStr) return '';
   
-  const match = periodStr.match(/(\d{4})年(前期|後期)/);
-  if (!match) {
-    Logger.log(`期の解析に失敗: ${periodStr}`);
-    return periodStr;
+  // "YYYY年前期/後期" のフルフォーマット
+  const fullMatch = periodStr.match(/(\d{4})年(前期|後期)/);
+  if (fullMatch) {
+    const year = parseInt(fullMatch[1]);
+    if (fullMatch[2] === '後期') {
+      return `${year + 1}年前期`;
+    } else {
+      return `${year}年後期`;
+    }
   }
   
-  const year = parseInt(match[1]);
-  const half = match[2];
-  
-  if (half === '後期') {
-    return `${year + 1}年前期`;
-  } else {
-    return `${year}年後期`;
+  // "YY前期/後期" の短縮フォーマット
+  const shortMatch = periodStr.match(/(\d{2})(前期|後期)/);
+  if (shortMatch) {
+    let yy = parseInt(shortMatch[1]);
+    if (shortMatch[2] === '後期') {
+      return `${yy + 1}前期`;
+    } else {
+      return `${yy}後期`;
+    }
   }
+  
+  Logger.log(`期の解析に失敗: ${periodStr}`);
+  return periodStr;
 }
