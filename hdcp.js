@@ -79,28 +79,31 @@ function calculateHDCP() {
       return;
     }
     
-    const dataRows = lastRow - 2;   // 3行目以降の行数
     const calcRows = lastRow - 4;   // 5行目以降の行数
     
-    // HDCPシートのA列(ID)を一括取得（3行目以降）
-    const hdcpIds = hdcpSheet.getRange(3, 1, dataRows, 1).getValues();
+    // HDCPシートのA列(ID)を一括取得（5行目以降）
+    const hdcpIds = hdcpSheet.getRange(5, 1, calcRows, 1).getValues();
     
-    // --- 3a: F～H列(前期) → C～E列(前々期)にコピー（3行目以降） ---
-    const prevPeriodValues = hdcpSheet.getRange(3, 6, dataRows, 3).getValues();
-    hdcpSheet.getRange(3, 3, dataRows, 3).setValues(prevPeriodValues);
-    
-    // --- 3b: F～H列を0クリアし、スコア集計シートのデータを反映（3行目以降） ---
-    const newFGH = Array.from({length: dataRows}, () => [0, 0, 0]);
-    for (let i = 0; i < dataRows; i++) {
-      const id = String(hdcpIds[i][0]);
-      if (id === '' || id === 'null' || id === 'undefined') continue;
-      if (scoreData[id]) {
-        newFGH[i][0] = scoreData[id].total;     // F列: 合計
-        newFGH[i][1] = scoreData[id].gameCount;  // G列: 試合数
-        newFGH[i][2] = scoreData[id].gross;       // H列: Gross
-      }
+    // --- 3a: F～H列(前期) → C～E列(前々期)にコピー（5行目以降） ---
+    if (calcRows > 0) {
+      const prevPeriodValues = hdcpSheet.getRange(5, 6, calcRows, 3).getValues();
+      hdcpSheet.getRange(5, 3, calcRows, 3).setValues(prevPeriodValues);
     }
-    hdcpSheet.getRange(3, 6, dataRows, 3).setValues(newFGH);
+    
+    // --- 3b: F～H列を0クリアし、スコア集計シートのデータを反映（5行目以降） ---
+    if (calcRows > 0) {
+      const newFGH = Array.from({length: calcRows}, () => [0, 0, 0]);
+      for (let i = 0; i < calcRows; i++) {
+        const id = String(hdcpIds[i][0]);
+        if (id === '' || id === 'null' || id === 'undefined') continue;
+        if (scoreData[id]) {
+          newFGH[i][0] = scoreData[id].total;     // F列: 合計
+          newFGH[i][1] = scoreData[id].gameCount;  // G列: 試合数
+          newFGH[i][2] = scoreData[id].gross;       // H列: Gross
+        }
+      }
+      hdcpSheet.getRange(5, 6, calcRows, 3).setValues(newFGH);
+    }
     
     // --- 3c: I～K列の計算（5行目以降）---
     // I列=C列+F列, J列=D列+G列, K列=I列/J列
@@ -122,22 +125,34 @@ function calculateHDCP() {
       hdcpSheet.getRange(5, 9, calcRows, 3).setValues(newIJK);
     }
     
-    // --- 3d: M列 → L列にコピー（3行目以降） ---
-    const mColValues = hdcpSheet.getRange(3, 13, dataRows, 1).getValues();
-    hdcpSheet.getRange(3, 12, dataRows, 1).setValues(mColValues);
+    // --- 3d: M列 → L列にコピー（5行目以降） ---
+    if (calcRows > 0) {
+      const mColValues = hdcpSheet.getRange(5, 13, calcRows, 1).getValues();
+      hdcpSheet.getRange(5, 12, calcRows, 1).setValues(mColValues);
+    }
     
-    // --- 3e: M列3行目 = L列の次の期 ---
-    const lVal = String(hdcpSheet.getRange(3, 12).getValue());
-    const nextPeriod = getNextPeriod(lVal);
-    hdcpSheet.getRange(3, 13).setValue(nextPeriod); // M3
+    // --- 3e: 3行目ヘッダー期名の更新 ---
+    // M3→L3にコピー、M3=次の期
+    const oldM3 = String(hdcpSheet.getRange(3, 13).getValue());
+    hdcpSheet.getRange(3, 12).setValue(oldM3); // L3 = 旧M3
+    const nextPeriod = getNextPeriod(oldM3);
+    hdcpSheet.getRange(3, 13).setValue(nextPeriod); // M3 = 次の期
     
-    // --- 3e2: G3, N3, O3 の期名ヘッダー更新 ---
-    // G3 = D3の次の期
+    // D3→G3にコピー（G3 = D3の次の期）
+    // ※D3には前々期名が入っているが、Step3aでF～Hの3行目はコピーしなくなったため
+    //   D3はそのまま残る。G3にはD3の次の期を設定
     const d3Val = String(hdcpSheet.getRange(3, 4).getValue());
     hdcpSheet.getRange(3, 7).setValue(getNextPeriod(d3Val)); // G3
-    // N3, O3 = 次の期（M3と同じ値）
+    
+    // N3 = 次の期（M3と同じ）
     hdcpSheet.getRange(3, 14).setValue(nextPeriod); // N3
-    hdcpSheet.getRange(3, 15).setValue(nextPeriod); // O3
+    
+    // O3 = L3と同じ
+    const l3Val = String(hdcpSheet.getRange(3, 12).getValue());
+    hdcpSheet.getRange(3, 15).setValue(l3Val); // O3
+    
+    // L1 = "20" + N3の値 + "用"  (例: N3="26前期" → L1="2026前期用")
+    hdcpSheet.getRange(1, 12).setValue(`20${nextPeriod}用`); // L1
     
     // --- 3f: M列5行目以降 = (5 - K列) ---
     if (calcRows > 0) {
@@ -156,12 +171,9 @@ function calculateHDCP() {
     if (calcRows > 0) {
       const newQ = Array.from({length: calcRows}, () => ['']);
       for (const entry of top3) {
-        for (let i = 0; i < dataRows; i++) {
+        for (let i = 0; i < calcRows; i++) {
           if (String(hdcpIds[i][0]) === String(entry.id)) {
-            // 5行目以降のインデックスに変換（3行目開始なのでi-2だが、calcRowsは5行目開始なのでi>=2のみ対象）
-            if (i >= 2) {
-              newQ[i - 2][0] = entry.rank;
-            }
+            newQ[i][0] = entry.rank;
             break;
           }
         }
@@ -186,7 +198,7 @@ function calculateHDCP() {
       const rBgColors = []; // R列: 背景色
       
       for (let i = 0; i < calcRows; i++) {
-        const id = String(hdcpIds[i + 2] ? hdcpIds[i + 2][0] : ''); // 5行目=hdcpIds[2]
+        const id = String(hdcpIds[i] ? hdcpIds[i][0] : ''); // 5行目開始
         const newHandy = Number(mValues[i][0]) || 0; // M列
         const lHandy = Number(lValues[i][0]) || 0;   // L列
         const pRank = Number(pValues[i][0]);
