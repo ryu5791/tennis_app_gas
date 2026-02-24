@@ -10,7 +10,7 @@
  *   F列(6)=前期合計,   G列(7)=前期試合数,   H列(8)=前期Gross
  *   I列(9)=2期合計,    J列(10)=2期試合数,    K列(11)=2期Gross
  *   L列(12)=前の期ハンディ, M列(13)=今の期ハンディ(=5-K)
- *   N列(14)=新ハンディ(修正後), O列(15)=新旧差(M-L)
+ *   N列(14)=新ハンディ(修正後), O列(15)=新旧差(N-L)
  *   P列(16)=前々期順位, Q列(17)=前期順位
  *   R列(18)=備考（修正コメント+背景色）
  *   T列(20)=会員フラグ
@@ -148,11 +148,11 @@ function calculateHDCP() {
     const nextPeriod = getNextPeriod(oldM3);
     hdcpSheet.getRange(3, 13).setValue(nextPeriod); // M3 = 次の期
     
-    // D3→G3にコピー（G3 = D3の次の期）
-    // ※D3には前々期名が入っているが、Step3aでF～Hの3行目はコピーしなくなったため
-    //   D3はそのまま残る。G3にはD3の次の期を設定
-    const d3Val = String(hdcpSheet.getRange(3, 4).getValue());
-    hdcpSheet.getRange(3, 7).setValue(getNextPeriod(d3Val)); // G3
+    // D3, G3 = それぞれ次の期に更新
+    const oldD3 = String(hdcpSheet.getRange(3, 4).getValue());
+    hdcpSheet.getRange(3, 4).setValue(getNextPeriod(oldD3)); // D3 = 次の期
+    const oldG3 = String(hdcpSheet.getRange(3, 7).getValue());
+    hdcpSheet.getRange(3, 7).setValue(getNextPeriod(oldG3)); // G3 = 次の期
     
     // N3 = 次の期（M3と同じ）
     hdcpSheet.getRange(3, 14).setValue(nextPeriod); // N3
@@ -235,8 +235,8 @@ function calculateHDCP() {
           bgColor = '#FFFF99'; // 薄黄
         }
         
-        // O列: M列 - L列
-        const oVal = round3(newHandy - lHandy);
+        // O列: N列 - L列
+        const oVal = round3(nVal - lHandy);
         
         newN.push([nVal]);
         newO.push([oVal]);
@@ -245,7 +245,7 @@ function calculateHDCP() {
       }
       
       hdcpSheet.getRange(5, 14, calcRows, 1).setValues(newN); // N列(新ハンディ)
-      hdcpSheet.getRange(5, 15, calcRows, 1).setValues(newO); // O列(M-L差分)
+      hdcpSheet.getRange(5, 15, calcRows, 1).setValues(newO); // O列(N-L差分)
       hdcpSheet.getRange(5, 18, calcRows, 1).setValues(newR); // R列(備考)
       
       // R列の背景色を設定（備考がある行のみ）
