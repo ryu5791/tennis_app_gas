@@ -26,6 +26,16 @@
  * HDCP計算ボタン押下時の処理
  * HDCPシートのボタンに割り当てる関数
  */
+
+/**
+ * 小数第四位を四捨五入（小数第三位まで表示）
+ * @param {number} val - 数値
+ * @return {number} 四捨五入後の値
+ */
+function round3(val) {
+  return Math.round(val * 1000) / 1000;
+}
+
 function calculateHDCP() {
   const ui = SpreadsheetApp.getUi();
   
@@ -97,9 +107,9 @@ function calculateHDCP() {
         const id = String(hdcpIds[i][0]);
         if (id === '' || id === 'null' || id === 'undefined') continue;
         if (scoreData[id]) {
-          newFGH[i][0] = scoreData[id].total;     // F列: 合計
-          newFGH[i][1] = scoreData[id].gameCount;  // G列: 試合数
-          newFGH[i][2] = scoreData[id].gross;       // H列: Gross
+          newFGH[i][0] = scoreData[id].total;              // F列: 合計
+          newFGH[i][1] = scoreData[id].gameCount;           // G列: 試合数
+          newFGH[i][2] = round3(scoreData[id].gross);       // H列: Gross
         }
       }
       hdcpSheet.getRange(5, 6, calcRows, 3).setValues(newFGH);
@@ -118,7 +128,7 @@ function calculateHDCP() {
         
         const iVal = cVal + fVal;
         const jVal = dVal + gVal;
-        const kVal = jVal > 0 ? iVal / jVal : 0;
+        const kVal = jVal > 0 ? round3(iVal / jVal) : 0;
         
         newIJK.push([iVal, jVal, kVal]);
       }
@@ -157,7 +167,7 @@ function calculateHDCP() {
     // --- 3f: M列5行目以降 = (5 - K列) ---
     if (calcRows > 0) {
       const kValues = hdcpSheet.getRange(5, 11, calcRows, 1).getValues(); // K列
-      const newM = kValues.map(row => [5 - (Number(row[0]) || 0)]);
+      const newM = kValues.map(row => [round3(5 - (Number(row[0]) || 0))]);
       hdcpSheet.getRange(5, 13, calcRows, 1).setValues(newM);
     }
     
@@ -211,7 +221,7 @@ function calculateHDCP() {
         // P列に1～3の数字がある場合
         if (pRank >= 1 && pRank <= 3) {
           const weight = weightMap[pRank];
-          nVal = newHandy * weight;
+          nVal = round3(newHandy * weight);
           remarks = `修正→{新ﾊﾝﾃﾞｲ}×${weight}`;
           bgColor = '#CCFFCC'; // 薄緑
         }
@@ -220,13 +230,13 @@ function calculateHDCP() {
         if (qRank >= 1 && qRank <= 3) {
           const weight = weightMap[qRank];
           const net = (id && scoreData[id]) ? (scoreData[id].net || 0) : 0;
-          nVal = (newHandy - (net - 5.0)) * weight;
+          nVal = round3((newHandy - (net - 5.0)) * weight);
           remarks = `修正→{新ﾊﾝﾃﾞｨー（ﾈｯﾄ-5.000）}×${weight}`;
           bgColor = '#FFFF99'; // 薄黄
         }
         
         // O列: M列 - L列
-        const oVal = newHandy - lHandy;
+        const oVal = round3(newHandy - lHandy);
         
         newN.push([nVal]);
         newO.push([oVal]);
