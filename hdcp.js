@@ -148,11 +148,12 @@ function calculateHDCP() {
     const nextPeriod = getNextPeriod(oldM3);
     hdcpSheet.getRange(3, 13).setValue(nextPeriod); // M3 = 次の期
     
-    // D3, G3 = それぞれ次の期に更新
-    const oldD3 = String(hdcpSheet.getRange(3, 4).getValue());
-    hdcpSheet.getRange(3, 4).setValue(getNextPeriod(oldD3)); // D3 = 次の期
-    const oldG3 = String(hdcpSheet.getRange(3, 7).getValue());
-    hdcpSheet.getRange(3, 7).setValue(getNextPeriod(oldG3)); // G3 = 次の期
+    // D3, G3 = L3を基準に算出（D3=L3の前の期、G3=L3と同じ）
+    // L3には旧M3(=今回の前期名)が入っている
+    const l3ForDG = String(hdcpSheet.getRange(3, 12).getValue());
+    const prevOfL3 = getPrevPeriod(l3ForDG); // L3の前の期 = 前々期名
+    hdcpSheet.getRange(3, 4).setValue(prevOfL3); // D3 = 前々期名
+    hdcpSheet.getRange(3, 7).setValue(l3ForDG);  // G3 = 前期名（=L3と同じ）
     
     // N3 = 次の期（M3と同じ）
     hdcpSheet.getRange(3, 14).setValue(nextPeriod); // N3
@@ -375,6 +376,42 @@ function getNextPeriod(periodStr) {
       return `${yy + 1}前期`;
     } else {
       return `${yy}後期`;
+    }
+  }
+  
+  Logger.log(`期の解析に失敗: ${periodStr}`);
+  return periodStr;
+}
+
+/**
+ * 期の文字列から前の期を計算する
+ * "2025年後期" → "2025年前期", "2025年前期" → "2024年後期"
+ * "25後期" → "25前期", "25前期" → "24後期" (短縮形式にも対応)
+ * @param {string} periodStr - 期の文字列
+ * @return {string} 前の期の文字列
+ */
+function getPrevPeriod(periodStr) {
+  if (!periodStr) return '';
+  
+  // "YYYY年前期/後期" のフルフォーマット
+  const fullMatch = periodStr.match(/(\d{4})年(前期|後期)/);
+  if (fullMatch) {
+    const year = parseInt(fullMatch[1]);
+    if (fullMatch[2] === '前期') {
+      return `${year - 1}年後期`;
+    } else {
+      return `${year}年前期`;
+    }
+  }
+  
+  // "YY前期/後期" の短縮フォーマット
+  const shortMatch = periodStr.match(/(\d{2})(前期|後期)/);
+  if (shortMatch) {
+    let yy = parseInt(shortMatch[1]);
+    if (shortMatch[2] === '前期') {
+      return `${yy - 1}後期`;
+    } else {
+      return `${yy}前期`;
     }
   }
   
